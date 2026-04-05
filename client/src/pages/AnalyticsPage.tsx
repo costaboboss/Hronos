@@ -19,6 +19,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Legend,
   Line,
   LineChart,
@@ -251,6 +252,16 @@ function EfficiencyChart({
               }}
             />
             <Bar dataKey="pct" radius={[6, 6, 0, 0]}>
+              <LabelList
+                dataKey="pct"
+                position="center"
+                formatter={(value: number) => `${value}%`}
+                style={{
+                  fill: "#07111f",
+                  fontSize: 16,
+                  fontWeight: 700,
+                }}
+              />
               {series.map((item) => (
                 <Cell key={item.fullLabel} fill={item.color} />
               ))}
