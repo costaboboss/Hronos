@@ -374,23 +374,25 @@ export default function TrackingPage() {
     const unknownNamesSet = new Set<string>();
 
     lines.forEach((line, rowIdx) => {
-      if (rowIdx >= TIME_SLOTS.length) return;
+      if (rowIdx >= TIME_SLOTS.length * 7) return;
 
       const parts = line.split("\t");
-      const columns =
-        parts.length >= 8 && /^\d{1,2}:\d{2}$/.test(parts[0].trim()) ? parts.slice(1, 8) : parts.slice(0, 7);
+      const values =
+        parts.length >= 2 && /^\d{1,2}:\d{2}$/.test(parts[0].trim()) ? parts.slice(1) : parts;
+      const rawName = (values[0] ?? "").trim();
+      const dayIdx = Math.floor(rowIdx / TIME_SLOTS.length);
+      const slotIdx = rowIdx % TIME_SLOTS.length;
 
-      for (let dayIdx = 0; dayIdx < Math.min(columns.length, 7); dayIdx++) {
-        const rawName = columns[dayIdx].trim();
-        parsedCells.push({
-          dayIdx,
-          slotIdx: rowIdx,
-          rawName,
-          slot: TIME_SLOTS[rowIdx],
-        });
-        if (rawName && !tagByName[rawName.toLowerCase()]) {
-          unknownNamesSet.add(rawName);
-        }
+      if (dayIdx >= 7) return;
+
+      parsedCells.push({
+        dayIdx,
+        slotIdx,
+        rawName,
+        slot: TIME_SLOTS[slotIdx],
+      });
+      if (rawName && !tagByName[rawName.toLowerCase()]) {
+        unknownNamesSet.add(rawName);
       }
     });
 
@@ -1465,13 +1467,13 @@ export default function TrackingPage() {
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Вставьте сюда всю неделю целиком: <code className="text-xs bg-muted px-1 rounded">96 строк × 7 столбцов</code>.
-              Каждый столбец — это день недели, каждая строка — один 15-минутный слот.
+              Вставьте сюда всю неделю целиком: <code className="text-xs bg-muted px-1 rounded">672 строки подряд</code>.
+              Первые 96 строк — понедельник, следующие 96 — вторник, потом среда и так до воскресенья.
               Если из Excel прилетит ещё первый столбец со временем, он тоже поддерживается.
             </p>
             <textarea
               className="w-full h-80 p-2 text-sm font-mono bg-input border border-border rounded resize-none focus:outline-none focus:ring-1 focus:ring-primary text-foreground"
-              placeholder={"сон\tсон\tсон\tсон\tсон\tсон\tсон\nсон\tсон\tсон\tсон\tсон\tсон\tсон\nработа\tработа\tтактика\tтактика\tработа\tотдых\tотдых\n..."}
+              placeholder={"сон\nсон\nработа\n...\n[96 строк понедельника]\nсон\nсон\nтактика\n...\n[96 строк вторника]\n..."}
               value={weekImportText}
               onChange={e => setWeekImportText(e.target.value)}
               autoFocus
