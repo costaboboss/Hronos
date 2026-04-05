@@ -5,12 +5,10 @@ import {
   addDays,
   eachDayOfInterval,
   endOfMonth,
-  endOfWeek,
   format,
   getISOWeek,
   isSameMonth,
   startOfMonth,
-  startOfWeek,
 } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,6 +53,17 @@ type EntryItem = {
   tagName: string | null;
 };
 
+type EfficiencyPoint = {
+  dateStr: string;
+  label: string;
+  shortLabel: string;
+  fullLabel: string;
+  blocks: number;
+  hours: number;
+  pct: number;
+  color: string;
+};
+
 function minutesToHM(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
@@ -70,11 +79,9 @@ function getWeekOptions() {
     const end = addDays(cur, 6);
     opts.push({
       value: String(w),
-      label: `Неделя ${w} (${format(cur, "d MMM", { locale: ru })} – ${format(
-        end,
-        "d MMM",
-        { locale: ru }
-      )})`,
+      label: `Неделя ${w} (${format(cur, "d MMM", { locale: ru })} – ${format(end, "d MMM", {
+        locale: ru,
+      })})`,
       start: format(cur, "yyyy-MM-dd"),
       end: format(end, "yyyy-MM-dd"),
       startDate: cur,
@@ -103,8 +110,7 @@ const WEEK_OPTIONS = getWeekOptions();
 const MONTH_OPTIONS = getMonthOptions();
 
 function buildTagStats(entries: EntryItem[], tags: TagItem[]) {
-  const map: Record<string, { name: string; color: string; blocks: number }> =
-    {};
+  const map: Record<string, { name: string; color: string; blocks: number }> = {};
   for (const e of entries) {
     if (!e.tagName) continue;
     if (!map[e.tagName]) {
@@ -125,11 +131,9 @@ function buildEfficiencySeries(
   tags: TagItem[],
   dates: Date[],
   workNormBlocks: number
-) {
+): EfficiencyPoint[] {
   const workTagIds = new Set(tags.filter((t) => t.isWork).map((t) => t.id));
-  const workTagNames = new Set(
-    tags.filter((t) => t.isWork).map((t) => t.name.toLowerCase())
-  );
+  const workTagNames = new Set(tags.filter((t) => t.isWork).map((t) => t.name.toLowerCase()));
   const dayCounts: Record<string, number> = {};
 
   for (const entry of entries) {
@@ -157,11 +161,7 @@ function buildEfficiencySeries(
   });
 }
 
-function EfficiencyCards({
-  series,
-}: {
-  series: Array<{ pct: number; blocks: number; fullLabel: string }>;
-}) {
+function EfficiencyCards({ series }: { series: Array<{ pct: number; fullLabel: string }> }) {
   const avgPct = series.length
     ? Math.round(series.reduce((sum, item) => sum + item.pct, 0) / series.length)
     : 0;
@@ -198,9 +198,7 @@ function EfficiencyCards({
         <Card key={card.label} className="bg-card border-border">
           <CardContent className="pt-4">
             <div className="text-xs text-muted-foreground mb-1">{card.label}</div>
-            <div className={`text-2xl font-semibold ${card.className}`}>
-              {card.value}
-            </div>
+            <div className={`text-2xl font-semibold ${card.className}`}>{card.value}</div>
             <div className="text-xs text-muted-foreground mt-1">{card.hint}</div>
           </CardContent>
         </Card>
@@ -222,18 +220,21 @@ function EfficiencyChart({
     color: string;
   }>;
 }) {
+  const compact = series.length > 20;
+
   return (
     <Card className="bg-card border-border">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={240}>
-          <BarChart data={series}>
+        <ResponsiveContainer width="100%" height={compact ? 280 : 240}>
+          <BarChart data={series} margin={{ top: 12, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.28 0.01 240)" />
             <XAxis
               dataKey="label"
               tick={{ fontSize: 11, fill: "oklch(0.82 0.01 240)" }}
+              interval={compact ? 2 : 0}
             />
             <YAxis
               domain={[0, 100]}
@@ -254,14 +255,15 @@ function EfficiencyChart({
               labelStyle={{ color: "#ffffff" }}
               itemStyle={{ color: "#ffffff" }}
             />
-            <Bar dataKey="pct" radius={[6, 6, 0, 0]}>
+            <Bar dataKey="pct" radius={[6, 6, 0, 0]} maxBarSize={compact ? 22 : 36}>
               <LabelList
                 dataKey="pct"
-                position="center"
-                formatter={(value: number) => `${value}%`}
+                position={compact ? "insideTop" : "center"}
+                offset={compact ? 8 : 0}
+                formatter={(value: number) => (compact ? (value > 0 ? `${value}%` : "") : `${value}%`)}
                 style={{
-                  fill: "#ffffff",
-                  fontSize: 13,
+                  fill: "#07111f",
+                  fontSize: compact ? 10 : 12,
                   fontWeight: 700,
                 }}
               />
@@ -298,17 +300,12 @@ function EfficiencyTable({
           {series.map((item) => (
             <div key={item.fullLabel} className="flex items-center gap-3">
               <div className="min-w-0 flex-1">
-                <div className="text-sm text-foreground truncate">
-                  {item.fullLabel}
-                </div>
+                <div className="text-sm text-foreground truncate">{item.fullLabel}</div>
                 <div className="text-xs text-muted-foreground">
                   {item.blocks} блоков • {item.hours.toFixed(1)}ч
                 </div>
               </div>
-              <Badge
-                variant="outline"
-                className={`${getEfficiencyTextClass(item.pct)} border-current/20`}
-              >
+              <Badge variant="outline" className={`${getEfficiencyTextClass(item.pct)} border-current/20`}>
                 {item.pct}%
               </Badge>
             </div>
@@ -336,28 +333,148 @@ function TagBreakdown({
       <CardContent>
         <div className="space-y-2">
           {stats.map((item) => {
-            const pct = totalBlocks
-              ? ((item.blocks / totalBlocks) * 100).toFixed(1)
-              : "0";
+            const pct = totalBlocks ? ((item.blocks / totalBlocks) * 100).toFixed(1) : "0";
             return (
               <div key={item.name} className="flex items-center gap-2">
-                <span
-                  className="w-3 h-3 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: item.color }}
-                />
-                <span className="flex-1 text-sm text-foreground truncate">
-                  {item.name}
-                </span>
-                <span className="text-sm text-muted-foreground">
-                  {minutesToHM(item.blocks * 15)}
-                </span>
-                <span className="text-xs text-muted-foreground w-12 text-right">
-                  {pct}%
-                </span>
+                <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
+                <span className="flex-1 text-sm text-foreground truncate">{item.name}</span>
+                <span className="text-sm text-muted-foreground">{minutesToHM(item.blocks * 15)}</span>
+                <span className="text-xs text-muted-foreground w-12 text-right">{pct}%</span>
               </div>
             );
           })}
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function YearTagCharts({
+  stats,
+  chartType,
+}: {
+  stats: Array<{ name: string; color: string; blocks: number }>;
+  chartType: "pie" | "bar" | "line";
+}) {
+  const totalBlocks = stats.reduce((sum, item) => sum + item.blocks, 0);
+  const chartData = stats.map((item) => ({
+    ...item,
+    minutes: item.blocks * 15,
+    pct: totalBlocks ? Math.round((item.blocks / totalBlocks) * 100) : 0,
+  }));
+
+  return (
+    <Card className="bg-card border-border">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium">Визуализация тегов за год</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {chartType === "pie" && (
+          <ResponsiveContainer width="100%" height={320}>
+            <PieChart>
+              <Pie
+                data={chartData}
+                dataKey="minutes"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                outerRadius={105}
+                label={({ name, percent }) => `${name} ${Math.round(percent * 100)}%`}
+                labelLine={false}
+              >
+                {chartData.map((item) => (
+                  <Cell key={item.name} fill={item.color} />
+                ))}
+              </Pie>
+              <Tooltip
+                formatter={(value: number) => minutesToHM(value)}
+                contentStyle={{
+                  backgroundColor: "oklch(0.17 0.01 240)",
+                  border: "1px solid oklch(0.28 0.01 240)",
+                  borderRadius: 6,
+                  color: "#ffffff",
+                }}
+                labelStyle={{ color: "#ffffff" }}
+                itemStyle={{ color: "#ffffff" }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        )}
+
+        {chartType === "bar" && (
+          <ResponsiveContainer width="100%" height={320}>
+            <BarChart data={chartData} layout="vertical" margin={{ left: 16, right: 12 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.28 0.01 240)" />
+              <XAxis
+                type="number"
+                tick={{ fontSize: 10, fill: "oklch(0.55 0.01 240)" }}
+                tickFormatter={(v) => `${Math.round(v / 60)}ч`}
+              />
+              <YAxis
+                type="category"
+                dataKey="name"
+                width={90}
+                tick={{ fontSize: 11, fill: "oklch(0.82 0.01 240)" }}
+              />
+              <Tooltip
+                formatter={(value: number) => minutesToHM(value)}
+                contentStyle={{
+                  backgroundColor: "oklch(0.17 0.01 240)",
+                  border: "1px solid oklch(0.28 0.01 240)",
+                  borderRadius: 6,
+                  color: "#ffffff",
+                }}
+                labelStyle={{ color: "#ffffff" }}
+                itemStyle={{ color: "#ffffff" }}
+              />
+              <Bar dataKey="minutes" radius={[0, 6, 6, 0]}>
+                {chartData.map((item) => (
+                  <Cell key={item.name} fill={item.color} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+
+        {chartType === "line" && (
+          <ResponsiveContainer width="100%" height={320}>
+            <LineChart data={chartData} margin={{ left: 8, right: 12 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.28 0.01 240)" />
+              <XAxis
+                dataKey="name"
+                tick={{ fontSize: 10, fill: "oklch(0.55 0.01 240)" }}
+                interval={0}
+                angle={-18}
+                textAnchor="end"
+                height={60}
+              />
+              <YAxis
+                tick={{ fontSize: 10, fill: "oklch(0.55 0.01 240)" }}
+                tickFormatter={(v) => `${Math.round(v / 60)}ч`}
+              />
+              <Tooltip
+                formatter={(value: number) => minutesToHM(value)}
+                contentStyle={{
+                  backgroundColor: "oklch(0.17 0.01 240)",
+                  border: "1px solid oklch(0.28 0.01 240)",
+                  borderRadius: 6,
+                  color: "#ffffff",
+                }}
+                labelStyle={{ color: "#ffffff" }}
+                itemStyle={{ color: "#ffffff" }}
+              />
+              <Line
+                type="monotone"
+                dataKey="minutes"
+                stroke="#38bdf8"
+                strokeWidth={3}
+                dot={({ cx, cy, payload }) => (
+                  <circle cx={cx} cy={cy} r={5} fill={payload.color} stroke="none" />
+                )}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
       </CardContent>
     </Card>
   );
@@ -440,9 +557,7 @@ function WeeklyAnalytics({ tags }: { tags: TagItem[] }) {
                     cx="50%"
                     cy="50%"
                     outerRadius={90}
-                    label={({ name, percent }) =>
-                      `${name} ${(percent * 100).toFixed(0)}%`
-                    }
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                     labelLine={false}
                   >
                     {stats.map((item) => (
@@ -455,7 +570,10 @@ function WeeklyAnalytics({ tags }: { tags: TagItem[] }) {
                       backgroundColor: "oklch(0.17 0.01 240)",
                       border: "1px solid oklch(0.28 0.01 240)",
                       borderRadius: 6,
+                      color: "#ffffff",
                     }}
+                    labelStyle={{ color: "#ffffff" }}
+                    itemStyle={{ color: "#ffffff" }}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -472,8 +590,7 @@ function WeeklyAnalytics({ tags }: { tags: TagItem[] }) {
 function MonthlyAnalytics({ tags }: { tags: TagItem[] }) {
   const { workNormBlocks } = useWorkNorm();
   const [monthNum, setMonthNum] = useState("1");
-  const monthOpt =
-    MONTH_OPTIONS.find((month) => month.value === monthNum) ?? MONTH_OPTIONS[0];
+  const monthOpt = MONTH_OPTIONS.find((month) => month.value === monthNum) ?? MONTH_OPTIONS[0];
   const { data: entries = [] } = trpc.entries.getByRange.useQuery({
     startDate: monthOpt.start,
     endDate: monthOpt.end,
@@ -482,8 +599,8 @@ function MonthlyAnalytics({ tags }: { tags: TagItem[] }) {
   const stats = useMemo(() => buildTagStats(entries, tags), [entries, tags]);
   const monthDays = useMemo(
     () =>
-      eachDayOfInterval({ start: monthOpt.startDate, end: monthOpt.endDate }).filter(
-        (day) => isSameMonth(day, monthOpt.startDate)
+      eachDayOfInterval({ start: monthOpt.startDate, end: monthOpt.endDate }).filter((day) =>
+        isSameMonth(day, monthOpt.startDate)
       ),
     [monthOpt]
   );
@@ -530,6 +647,7 @@ function MonthlyAnalytics({ tags }: { tags: TagItem[] }) {
 function YearlyAnalytics({ tags }: { tags: TagItem[] }) {
   const { workNormBlocks } = useWorkNorm();
   const [selectedTag, setSelectedTag] = useState("all");
+  const [tagChartType, setTagChartType] = useState<"pie" | "bar" | "line">("pie");
   const { data: entries = [] } = trpc.entries.getByRange.useQuery({
     startDate: "2025-12-29",
     endDate: "2026-12-31",
@@ -567,8 +685,7 @@ function YearlyAnalytics({ tags }: { tags: TagItem[] }) {
       );
       const row: Record<string, number | string> = { week: `Н${week.value}` };
       for (const tag of tags) {
-        row[tag.name] =
-          weekEntries.filter((entry) => entry.tagName === tag.name).length * 15;
+        row[tag.name] = weekEntries.filter((entry) => entry.tagName === tag.name).length * 15;
       }
       return row;
     });
@@ -578,6 +695,14 @@ function YearlyAnalytics({ tags }: { tags: TagItem[] }) {
     selectedTag === "all"
       ? tags.slice(0, 6)
       : tags.filter((tag) => tag.name === selectedTag);
+
+  const yearStatCards = useMemo(() => {
+    const total = yearStats.reduce((sum, item) => sum + item.blocks, 0);
+    return yearStats.map((item) => ({
+      ...item,
+      pct: total ? Math.round((item.blocks / total) * 100) : 0,
+    }));
+  }, [yearStats]);
 
   return (
     <div className="space-y-4">
@@ -595,37 +720,82 @@ function YearlyAnalytics({ tags }: { tags: TagItem[] }) {
             ))}
           </SelectContent>
         </Select>
+
         <span className="text-sm text-muted-foreground">
-          Год 2026 • Норма дня:{" "}
-          <strong className="text-foreground">{workNormBlocks} блоков</strong>
+          Год 2026 • Норма дня: <strong className="text-foreground">{workNormBlocks} блоков</strong>
         </span>
+
+        <Select value={tagChartType} onValueChange={(value: "pie" | "bar" | "line") => setTagChartType(value)}>
+          <SelectTrigger className="w-56 bg-card border-border">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="bg-card border-border">
+            <SelectItem value="pie">Круговая диаграмма</SelectItem>
+            <SelectItem value="bar">Гистограмма</SelectItem>
+            <SelectItem value="line">Линейная диаграмма</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <EfficiencyChart
-          title="Средняя эффективность по неделям"
-          series={weeklyEfficiency.map((item) => ({
-            ...item,
-            label: item.week,
-            fullLabel: item.week,
-            blocks: item.pct,
-            hours: item.pct,
-          }))}
-        />
+        <Card className="bg-card border-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Средняя эффективность по неделям</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={320}>
+              <BarChart data={weeklyEfficiency} margin={{ top: 12, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.28 0.01 240)" />
+                <XAxis
+                  dataKey="week"
+                  tick={{ fontSize: 10, fill: "oklch(0.82 0.01 240)" }}
+                  interval={2}
+                />
+                <YAxis
+                  domain={[0, 100]}
+                  tick={{ fontSize: 10, fill: "oklch(0.55 0.01 240)" }}
+                  tickFormatter={(v) => `${v}%`}
+                />
+                <Tooltip
+                  formatter={(value: number) => `${value}%`}
+                  contentStyle={{
+                    backgroundColor: "oklch(0.17 0.01 240)",
+                    border: "1px solid oklch(0.28 0.01 240)",
+                    borderRadius: 6,
+                    color: "#ffffff",
+                  }}
+                  labelStyle={{ color: "#ffffff" }}
+                  itemStyle={{ color: "#ffffff" }}
+                />
+                <Bar dataKey="pct" radius={[6, 6, 0, 0]} maxBarSize={22}>
+                  <LabelList
+                    dataKey="pct"
+                    position="insideTop"
+                    offset={8}
+                    formatter={(value: number) => (value > 0 ? `${value}%` : "")}
+                    style={{
+                      fill: "#07111f",
+                      fontSize: 10,
+                      fontWeight: 700,
+                    }}
+                  />
+                  {weeklyEfficiency.map((item) => (
+                    <Cell key={item.week} fill={item.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
 
         <Card className="bg-card border-border">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Динамика тегов по неделям
-            </CardTitle>
+            <CardTitle className="text-sm font-medium">Динамика тегов по неделям</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={320}>
               <LineChart data={weeklyTrend} margin={{ left: 0, right: 10 }}>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="oklch(0.28 0.01 240)"
-                />
+                <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.28 0.01 240)" />
                 <XAxis
                   dataKey="week"
                   tick={{ fontSize: 9, fill: "oklch(0.55 0.01 240)" }}
@@ -641,7 +811,10 @@ function YearlyAnalytics({ tags }: { tags: TagItem[] }) {
                     backgroundColor: "oklch(0.17 0.01 240)",
                     border: "1px solid oklch(0.28 0.01 240)",
                     borderRadius: 6,
+                    color: "#ffffff",
                   }}
+                  labelStyle={{ color: "#ffffff" }}
+                  itemStyle={{ color: "#ffffff" }}
                 />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 {displayTags.map((tag) => (
@@ -660,37 +833,24 @@ function YearlyAnalytics({ tags }: { tags: TagItem[] }) {
         </Card>
       </div>
 
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)] gap-4">
+        <YearTagCharts stats={yearStats} chartType={tagChartType} />
+        <TagBreakdown title="По тегам за год" stats={yearStats} />
+      </div>
+
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-        {yearStats.map((item) => {
-          const pct = yearStats.length
-            ? Math.round(
-                (item.blocks /
-                  yearStats.reduce((sum, current) => sum + current.blocks, 0)) *
-                  100
-              )
-            : 0;
-          return (
-            <Card key={item.name} className="bg-card border-border">
-              <CardContent className="pt-4 pb-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <span
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: item.color }}
-                  />
-                  <span className="text-sm font-medium text-foreground truncate">
-                    {item.name}
-                  </span>
-                </div>
-                <div className="text-lg font-bold text-foreground">
-                  {minutesToHM(item.blocks * 15)}
-                </div>
-                <div className={`text-xs ${getEfficiencyTextClass(pct)}`}>
-                  {pct}% года
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+        {yearStatCards.map((item) => (
+          <Card key={item.name} className="bg-card border-border">
+            <CardContent className="pt-4 pb-3">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                <span className="text-sm font-medium text-foreground truncate">{item.name}</span>
+              </div>
+              <div className="text-lg font-bold text-foreground">{minutesToHM(item.blocks * 15)}</div>
+              <div className={`text-xs ${getEfficiencyTextClass(item.pct)}`}>{item.pct}% года</div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
     </div>
   );
