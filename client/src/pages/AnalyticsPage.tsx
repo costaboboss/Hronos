@@ -249,7 +249,10 @@ function EfficiencyChart({
                 backgroundColor: "oklch(0.17 0.01 240)",
                 border: "1px solid oklch(0.28 0.01 240)",
                 borderRadius: 6,
+                color: "#ffffff",
               }}
+              labelStyle={{ color: "#ffffff" }}
+              itemStyle={{ color: "#ffffff" }}
             />
             <Bar dataKey="pct" radius={[6, 6, 0, 0]}>
               <LabelList
@@ -257,8 +260,8 @@ function EfficiencyChart({
                 position="center"
                 formatter={(value: number) => `${value}%`}
                 style={{
-                  fill: "#07111f",
-                  fontSize: 16,
+                  fill: "#ffffff",
+                  fontSize: 13,
                   fontWeight: 700,
                 }}
               />
