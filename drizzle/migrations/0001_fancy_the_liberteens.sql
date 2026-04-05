@@ -1,1 +1,2 @@
-ALTER TABLE `tags` ADD `isWork` boolean DEFAULT false NOT NULL;
+ALTER TABLE "tags"
+ADD COLUMN IF NOT EXISTS "isWork" boolean DEFAULT false NOT NULL;
