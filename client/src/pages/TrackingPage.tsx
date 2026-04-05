@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
+import { getEfficiencyColor, getEfficiencyTextClass } from "@/lib/efficiency";
+import { blocksToHours, blocksToPercent, useWorkNorm } from "@/lib/workNorm";
 import { toast } from "sonner";
 import { Plus, Copy, Clipboard, ChevronLeft, ChevronRight, Trash2, FileInput } from "lucide-react";
 import {
@@ -78,6 +80,7 @@ type ClipEntry = { offset: number; tag: TagItem | null };
 export default function TrackingPage() {
   const { user } = useAuth();
   const utils = trpc.useUtils();
+  const { workNormBlocks, setWorkNormBlocks } = useWorkNorm();
 
   const [weekMonday, setWeekMonday] = useState<Date>(() => {
     const today = new Date();
@@ -98,6 +101,7 @@ export default function TrackingPage() {
   const [newTagForMulti, setNewTagForMulti] = useState("");
   // Single-cell context: which cell was clicked (for Continue button)
   const [menuCell, setMenuCell] = useState<{ dayIdx: number; slotIdx: number; dateStr: string } | null>(null);
+  const [activeCell, setActiveCell] = useState<{ dayIdx: number; slotIdx: number } | null>(null);
 
   // Internal clipboard (copy within app)
   const [clipboard, setClipboard] = useState<ClipEntry[] | null>(null);
@@ -414,6 +418,7 @@ export default function TrackingPage() {
   const openImportDialog = useCallback((target: { dayIdx: number; slotIdx: number }) => {
     importTargetRef.current = target;
     setImportText("");
+    setActiveCell(target);
     setImportDialogOpen(true);
   }, []);
 
@@ -424,6 +429,7 @@ export default function TrackingPage() {
     processExcelText(importText, target);
     setImportDialogOpen(false);
     setImportText("");
+    setActiveCell(null);
   }, [importText, processExcelText]);
 
   // Week navigation
@@ -452,6 +458,7 @@ export default function TrackingPage() {
     setMultiMenuOpen(false);
     setMultiMenuPos(null);
     setMenuCell(null);
+    setActiveCell(null);
     setDragState({ startDay: dayIdx, endDay: dayIdx, startSlot: slotIdx, endSlot: slotIdx, active: true });
     setSelection(null);
   };
@@ -507,6 +514,7 @@ export default function TrackingPage() {
     setMultiMenuOpen(false);
     setMultiMenuPos(null);
     setMenuCell(null);
+    setActiveCell(null);
   }, [bulkMutation]);
 
   const handleMultiAddTag = useCallback((name: string) => {
@@ -539,6 +547,7 @@ export default function TrackingPage() {
     setMultiMenuOpen(false);
     setMultiMenuPos(null);
     setMenuCell(null);
+    setActiveCell(null);
   }, [menuCell, upsertMutation]);
 
   // Open unified tag menu on single cell click
@@ -548,6 +557,7 @@ export default function TrackingPage() {
     setSelection(newSel);
     selectionRef.current = newSel;
     setMenuCell({ dayIdx, slotIdx, dateStr });
+    setActiveCell({ dayIdx, slotIdx });
     setMultiMenuPos({ x: e.clientX, y: e.clientY });
     setMultiMenuOpen(true);
   }, []);
@@ -617,28 +627,7 @@ export default function TrackingPage() {
     return { tags: Object.values(counts).sort((a, b) => b.count - a.count), total };
   }, [todayEntries, tagList]);
 
-  // 1 block = 2.5% of daily norm → norm = 40 blocks = 100%
-  const WORK_NORM_BLOCKS = 40;
-  const workPct = Math.min(100, Math.round(workBlocksToday.total / WORK_NORM_BLOCKS * 100));
-
-  // Color scale for efficiency %
-  // 0-10: red, 10-20: pink, 20-30: pale-yellow, 30-50: yellow, 50-70: green, 70+: bright-green
-  const getEfficiencyTextColor = (pct: number) => {
-    if (pct < 10) return "text-red-500";
-    if (pct < 20) return "text-pink-400";
-    if (pct < 30) return "text-yellow-200";
-    if (pct < 50) return "text-yellow-400";
-    if (pct < 70) return "text-green-400";
-    return "text-emerald-400";
-  };
-  const getEfficiencyBarColor = (pct: number) => {
-    if (pct < 10) return "#ef4444";   // red-500
-    if (pct < 20) return "#f472b6";   // pink-400
-    if (pct < 30) return "#fef08a";   // yellow-200
-    if (pct < 50) return "#facc15";   // yellow-400
-    if (pct < 70) return "#4ade80";   // green-400
-    return "#34d399";                  // emerald-400 (bright green)
-  };
+  const workPct = blocksToPercent(workBlocksToday.total, workNormBlocks);
 
   // Efficiency per day for last 7 days
   const DAY_NAMES_SHORT = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
@@ -660,11 +649,11 @@ export default function TrackingPage() {
       const dayName = DAY_NAMES_SHORT[d.getDay()];
       const dayNum = format(d, "d MMM", { locale: ru });
       const blocks = dayCounts[dateStr] ?? 0;
-      const pct = Math.min(100, Math.round(blocks / WORK_NORM_BLOCKS * 100));
+      const pct = blocksToPercent(blocks, workNormBlocks);
       days7.push({ dateStr, label: `${dayName} ${dayNum}`, pct });
     }
     return days7;
-  }, [last7Entries, tagList]);
+  }, [last7Entries, tagList, workNormBlocks]);
 
   // Average efficiency: last 7 days
   const avgLast7 = efficiencyLast7.length > 0
@@ -685,8 +674,8 @@ export default function TrackingPage() {
     const daysElapsed = Math.max(1, Math.round((new Date().getTime() - monDate.getTime()) / 86400000) + 1);
     const daysInRange = Math.min(daysElapsed, 7);
     const totalBlocks = Object.values(dayCounts).reduce((s, v) => s + v, 0);
-    return Math.min(100, Math.round(totalBlocks / (WORK_NORM_BLOCKS * daysInRange) * 100));
-  }, [thisWeekEntries, tagList, currentWeekMonStr]);
+    return blocksToPercent(totalBlocks / daysInRange, workNormBlocks);
+  }, [thisWeekEntries, tagList, currentWeekMonStr, workNormBlocks]);
 
   // ── Keyboard shortcuts ──
   useEffect(() => {
@@ -923,7 +912,7 @@ export default function TrackingPage() {
                       className="border-r border-border/40 text-right pr-1.5 align-middle sticky left-0 bg-background z-10"
                       style={{ width: 52 }}
                     >
-                      <span className={`text-[10px] leading-none font-mono ${isHour ? "text-white font-semibold" : "text-white/60"}`}>
+                      <span className="text-[10px] leading-none font-mono text-white font-semibold">
                         {slot.label}
                       </span>
                     </td>
@@ -937,7 +926,7 @@ export default function TrackingPage() {
                       const highlighted = isDragHighlighted(di, si);
                       const selected = isSelected(di, si);
                       const isWeekend = di >= 5;
-                      const isActive = false; // reserved for future use
+                      const isActive = activeCell?.dayIdx === di && activeCell?.slotIdx === si;
                       const isPaste = isPastePreview(di, si);
 
                       return (
@@ -969,7 +958,7 @@ export default function TrackingPage() {
                               {tag && !highlighted && (
                                 <span
                                   className="absolute inset-0 flex items-center px-1 text-[11px] font-semibold truncate pointer-events-none leading-none"
-                                  style={{ color: "#ffffff", textShadow: `0 0 6px ${tag.color}` }}
+                                  style={{ color: "#ffffff", textShadow: `0 0 8px ${tag.color}`, letterSpacing: "-0.01em" }}
                                 >
                                   {tag.name}
                                 </span>
@@ -1029,7 +1018,7 @@ export default function TrackingPage() {
                       className="border-l border-border/40 text-left pl-1.5 align-middle sticky right-0 bg-background z-10"
                       style={{ width: 52 }}
                     >
-                      <span className={`text-[10px] leading-none font-mono ${isHour ? "text-white font-semibold" : "text-white/60"}`}>
+                      <span className="text-[10px] leading-none font-mono text-white font-semibold">
                         {slot.label}
                       </span>
                     </td>
@@ -1050,25 +1039,39 @@ export default function TrackingPage() {
                   <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
                   Рабочие блоки
                 </div>
-                <div className="text-[10px] text-white/80 mt-0.5">Норма: 40 блоков = 100% (1 блок = 2.5%)</div>
+                <div className="text-[10px] text-white/80 mt-0.5">
+                  Норма: {workNormBlocks} блоков = 100% ({blocksToHours(workNormBlocks).toFixed(1)}ч)
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-[10px] text-white/70 whitespace-nowrap">Дневная норма</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={96}
+                    value={workNormBlocks}
+                    onChange={(e) => setWorkNormBlocks(Number.parseInt(e.target.value || "0", 10))}
+                    className="h-7 w-16 bg-input px-2 text-xs"
+                  />
+                  <span className="text-[10px] text-white/50">по 15 минут</span>
+                </div>
               </div>
 
               {/* ─ Today progress ─ */}
               <div className="px-3 pt-3 pb-2">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[10px] text-white uppercase tracking-wide">Сегодня</span>
-                  <span className={`text-sm font-bold ${getEfficiencyTextColor(workPct)}`}>
+                  <span className={`text-sm font-bold ${getEfficiencyTextClass(workPct)}`}>
                     {workPct}%
                   </span>
                 </div>
                 <div className="w-full h-2.5 bg-muted/40 rounded-full overflow-hidden">
                   <div
                     className="h-full rounded-full transition-all duration-500"
-                    style={{ width: `${workPct}%`, backgroundColor: getEfficiencyBarColor(workPct) }}
+                    style={{ width: `${workPct}%`, backgroundColor: getEfficiencyColor(workPct) }}
                   />
                 </div>
                 <div className="text-[10px] text-white/80 mt-1">
-                  {workBlocksToday.total} бл. • {workBlocksToday.total * 15} мин • {(workBlocksToday.total * 15 / 60).toFixed(1)}ч
+                  {workBlocksToday.total} бл. • {workBlocksToday.total * 15} мин • {blocksToHours(workBlocksToday.total).toFixed(1)}ч
                 </div>
               </div>
 
@@ -1089,13 +1092,13 @@ export default function TrackingPage() {
               <div className="mx-3 mt-1 pt-2 border-t border-border/50 pb-2 space-y-1.5">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-white">Ср. за неделю</span>
-                  <span className={`text-xs font-semibold ${getEfficiencyTextColor(efficiencyThisWeek)}`}>
+                  <span className={`text-xs font-semibold ${getEfficiencyTextClass(efficiencyThisWeek)}`}>
                     {efficiencyThisWeek}%
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-white">Ср. за 7 дней</span>
-                  <span className={`text-xs font-semibold ${getEfficiencyTextColor(avgLast7)}`}>
+                  <span className={`text-xs font-semibold ${getEfficiencyTextClass(avgLast7)}`}>
                     {avgLast7}%
                   </span>
                 </div>
@@ -1111,10 +1114,10 @@ export default function TrackingPage() {
                       <div className="flex-1 h-1.5 bg-muted/30 rounded-full overflow-hidden">
                         <div
                           className="h-full rounded-full"
-                          style={{ width: `${day.pct}%`, backgroundColor: day.pct > 0 ? getEfficiencyBarColor(day.pct) : "transparent" }}
+                          style={{ width: `${day.pct}%`, backgroundColor: day.pct > 0 ? getEfficiencyColor(day.pct) : "transparent" }}
                         />
                       </div>
-                      <span className={`text-[10px] w-7 text-right flex-shrink-0 font-medium ${day.pct > 0 ? getEfficiencyTextColor(day.pct) : "text-white/40"}`}>
+                      <span className={`text-[10px] w-7 text-right flex-shrink-0 font-medium ${day.pct > 0 ? getEfficiencyTextClass(day.pct) : "text-white/40"}`}>
                         {day.pct}%
                       </span>
                     </div>
@@ -1160,7 +1163,7 @@ export default function TrackingPage() {
       {/* ── Floating unified tag menu ── */}
       {multiMenuOpen && multiMenuPos && (
         <>
-          <div className="fixed inset-0 z-40" onMouseDown={() => { setMultiMenuOpen(false); setMultiMenuPos(null); setMenuCell(null); }} />
+          <div className="fixed inset-0 z-40" onMouseDown={() => { setMultiMenuOpen(false); setMultiMenuPos(null); setMenuCell(null); setActiveCell(null); }} />
           <div
             className="fixed z-50 bg-card border border-border rounded-lg shadow-xl p-2 w-52"
             style={{ left: Math.min(multiMenuPos.x + 8, window.innerWidth - 220), top: Math.min(multiMenuPos.y + 4, window.innerHeight - 320) }}
@@ -1250,7 +1253,7 @@ export default function TrackingPage() {
                 autoFocus
                 onKeyDown={e => {
                   if (e.key === "Enter" && newTagForMulti.trim()) { handleMultiAddTag(newTagForMulti.trim()); setNewTagForMulti(""); }
-                  if (e.key === "Escape") { setMultiMenuOpen(false); setMultiMenuPos(null); }
+                  if (e.key === "Escape") { setMultiMenuOpen(false); setMultiMenuPos(null); setActiveCell(null); }
                 }}
               />
               <Button size="sm" variant="ghost" className="h-7 w-7 p-0"
@@ -1263,7 +1266,7 @@ export default function TrackingPage() {
       )}
 
       {/* ── Excel Import Dialog ── */}
-      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+      <Dialog open={importDialogOpen} onOpenChange={(open) => { setImportDialogOpen(open); if (!open) setActiveCell(null); }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Импорт из Excel</DialogTitle>
@@ -1285,7 +1288,7 @@ export default function TrackingPage() {
             </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setImportDialogOpen(false)}>Отмена</Button>
+            <Button variant="outline" onClick={() => { setImportDialogOpen(false); setActiveCell(null); }}>Отмена</Button>
             <Button onClick={handleImportConfirm} disabled={!importText.trim()}>
               Вставить {importText.trim() ? `(${importText.trim().split(/\r?\n/).filter(l => l.trim()).length} строк)` : ""}
             </Button>
