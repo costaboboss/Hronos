@@ -677,6 +677,36 @@ export default function TrackingPage() {
     return blocksToPercent(totalBlocks / daysInRange, workNormBlocks);
   }, [thisWeekEntries, tagList, currentWeekMonStr, workNormBlocks]);
 
+  const selectedWeekEfficiency = useMemo(() => {
+    const workTagIds = new Set((tagList as TagItem[]).filter(t => t.isWork).map(t => t.id));
+    const workTagNames = new Set((tagList as TagItem[]).filter(t => t.isWork).map(t => t.name.toLowerCase()));
+    const dayCounts: Record<string, number> = {};
+
+    for (const e of rawEntries) {
+      const isWork = (e.tagId && workTagIds.has(e.tagId)) || (e.tagName && workTagNames.has(e.tagName.toLowerCase()));
+      if (!isWork) continue;
+      dayCounts[e.entryDate] = (dayCounts[e.entryDate] ?? 0) + 1;
+    }
+
+    return days.map((d) => {
+      const dateStr = format(d, "yyyy-MM-dd");
+      const dayName = DAY_NAMES_SHORT[d.getDay()];
+      const dayNum = format(d, "d MMM", { locale: ru });
+      const blocks = dayCounts[dateStr] ?? 0;
+      const pct = blocksToPercent(blocks, workNormBlocks);
+
+      return {
+        dateStr,
+        label: `${dayName} ${dayNum}`,
+        pct,
+      };
+    });
+  }, [days, rawEntries, tagList, workNormBlocks]);
+
+  const selectedWeekAvg = selectedWeekEfficiency.length > 0
+    ? Math.round(selectedWeekEfficiency.reduce((sum, day) => sum + day.pct, 0) / selectedWeekEfficiency.length)
+    : 0;
+
   // ── Keyboard shortcuts ──
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1092,14 +1122,14 @@ export default function TrackingPage() {
               <div className="mx-3 mt-1 pt-2 border-t border-border/50 pb-2 space-y-1.5">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-white">Ср. за неделю</span>
-                  <span className={`text-xs font-semibold ${getEfficiencyTextClass(efficiencyThisWeek)}`}>
-                    {efficiencyThisWeek}%
+                  <span className={`text-xs font-semibold ${getEfficiencyTextClass(selectedWeekAvg)}`}>
+                    {selectedWeekAvg}%
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-white">Ср. за 7 дней</span>
-                  <span className={`text-xs font-semibold ${getEfficiencyTextClass(avgLast7)}`}>
-                    {avgLast7}%
+                  <span className={`text-xs font-semibold ${getEfficiencyTextClass(selectedWeekAvg)}`}>
+                    {selectedWeekAvg}%
                   </span>
                 </div>
               </div>
@@ -1108,8 +1138,8 @@ export default function TrackingPage() {
               <div className="mx-3 pt-2 border-t border-border/50 pb-3">
                 <div className="text-[10px] text-white uppercase tracking-wide mb-1.5">Последние 7 дней</div>
                 <div className="space-y-1">
-                  {efficiencyLast7.map(day => (
-                    <div key={day.dateStr} className={`flex items-center gap-2 ${day.dateStr === todayStr ? "opacity-100" : "opacity-80"}`}>
+                  {selectedWeekEfficiency.map(day => (
+                    <div key={day.dateStr} className="flex items-center gap-2 opacity-100">
                       <span className="text-[10px] text-white w-14 flex-shrink-0 truncate">{day.label}</span>
                       <div className="flex-1 h-1.5 bg-muted/30 rounded-full overflow-hidden">
                         <div
