@@ -34,7 +34,6 @@ export function useAuth(options?: UseAuthOptions) {
       ) {
         return;
       }
-
       throw error;
     } finally {
       utils.auth.me.setData(undefined, null);

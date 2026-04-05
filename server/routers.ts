@@ -34,6 +34,47 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         return db.updateTag(input.id, ctx.user.id, { name: input.name, color: input.color });
       }),
+
+    setWork: protectedProcedure
+      .input(z.object({ id: z.number(), isWork: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        return db.updateTag(input.id, ctx.user.id, { isWork: input.isWork });
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const dbConn = await db.getDb();
+        if (!dbConn) throw new Error("DB unavailable");
+        const { eq, and } = await import("drizzle-orm");
+        const { tags } = await import("../drizzle/schema");
+        await dbConn.delete(tags).where(and(eq(tags.id, input.id), eq(tags.userId, ctx.user.id)));
+        return { success: true };
+      }),
+
+    createMany: protectedProcedure
+      .input(z.array(z.object({ name: z.string().min(1).max(100), color: z.string().max(20) })))
+      .mutation(async ({ ctx, input }) => {
+        // Get existing tags to avoid duplicates
+        const existing = await db.getTagsByUser(ctx.user.id);
+        const existingByName: Record<string, typeof existing[0]> = {};
+        for (const t of existing) existingByName[t.name.toLowerCase()] = t;
+
+        const result: typeof existing = [];
+        for (const item of input) {
+          const key = item.name.toLowerCase();
+          if (existingByName[key]) {
+            result.push(existingByName[key]);
+          } else {
+            const created = await db.createTag({ userId: ctx.user.id, name: item.name, color: item.color, isDefault: false });
+            if (created) {
+              result.push(created);
+              existingByName[key] = created;
+            }
+          }
+        }
+        return result;
+      }),
   }),
 
   entries: router({
@@ -92,6 +133,13 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         await db.deleteTimeEntry(input.id, ctx.user.id);
         return { success: true };
+      }),
+
+    bulkClear: protectedProcedure
+      .input(z.array(z.object({ entryDate: z.string(), startTime: z.string() })))
+      .mutation(async ({ ctx, input }) => {
+        await db.bulkClearTimeEntries(ctx.user.id, input);
+        return { success: true, cleared: input.length };
       }),
   }),
 });

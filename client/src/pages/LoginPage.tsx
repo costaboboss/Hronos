@@ -14,13 +14,11 @@ export default function LoginPage() {
             Хронос
           </h1>
         </div>
-
         <p className="text-muted-foreground text-sm leading-relaxed">
           Система сплошного хронометража жизни.
           <br />
           Каждый день разбит на 15-минутные интервалы.
         </p>
-
         <Button
           className="w-full"
           onClick={() => {

@@ -8,6 +8,13 @@
       "when": 1774859727421,
       "tag": "0000_clever_grim_reaper",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1775368439909,
+      "tag": "0001_fancy_the_liberteens",
+      "breakpoints": true
     }
   ]
 }

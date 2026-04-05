@@ -20,6 +20,7 @@ CREATE TABLE "tags" (
   "name" varchar(100) NOT NULL,
   "color" varchar(20) DEFAULT '#6366f1' NOT NULL,
   "isDefault" boolean DEFAULT false NOT NULL,
+  "isWork" boolean DEFAULT false NOT NULL,
   "createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint

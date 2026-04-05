@@ -4,11 +4,12 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import { useAuth } from "./_core/hooks/useAuth";
-import DashboardLayout from "./components/DashboardLayout";
-import AnalyticsPage from "./pages/AnalyticsPage";
-import LoginPage from "./pages/LoginPage";
 import TrackingPage from "./pages/TrackingPage";
+import AnalyticsPage from "./pages/AnalyticsPage";
+import TagsPage from "./pages/TagsPage";
+import LoginPage from "./pages/LoginPage";
+import DashboardLayout from "./components/DashboardLayout";
+import { useAuth } from "./_core/hooks/useAuth";
 
 function AuthenticatedApp() {
   const { isAuthenticated, loading } = useAuth();
@@ -31,6 +32,7 @@ function AuthenticatedApp() {
         <Route path="/" component={TrackingPage} />
         <Route path="/tracking" component={TrackingPage} />
         <Route path="/analytics" component={AnalyticsPage} />
+        <Route path="/tags" component={TagsPage} />
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
       </Switch>

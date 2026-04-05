@@ -39,8 +39,6 @@ export async function getDb() {
   return _db;
 }
 
-// Users
-
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) throw new Error("User openId is required for upsert");
 
@@ -86,19 +84,17 @@ export async function getUserByOpenId(openId: string) {
   return result[0];
 }
 
-// Tags
-
 const DEFAULT_TAGS = [
   { name: "\u0441\u043e\u043d", color: "#6366f1" },
-  { name: "\u0440\u0430\u0431\u043e\u0442\u0430", color: "#f59e0b" },
-  { name: "\u0442\u0430\u043a\u0442\u0438\u043a\u0430", color: "#10b981" },
-  { name: "\u0442\u0440\u0435\u043d\u0438\u0440\u043e\u0432\u043a\u0430", color: "#ef4444" },
+  { name: "\u0440\u0430\u0431\u043e\u0442\u0430", color: "#f59e0b", isWork: true },
+  { name: "\u0442\u0430\u043a\u0442\u0438\u043a\u0430", color: "#10b981", isWork: true },
+  { name: "\u0442\u0440\u0435\u043d\u0438\u0440\u043e\u0432\u043a\u0430", color: "#ef4444", isWork: true },
   { name: "\u0435\u0434\u0430", color: "#f97316" },
   { name: "\u0434\u043e\u0440\u043e\u0433\u0430", color: "#8b5cf6" },
   { name: "\u043e\u0442\u0434\u044b\u0445", color: "#06b6d4" },
   { name: "\u043b\u0435\u0436\u0430\u043b", color: "#84cc16" },
   { name: "\u0431\u044b\u0442\u043e\u0432\u044b\u0435 \u0434\u0435\u043b\u0430", color: "#ec4899" },
-  { name: "\u043e\u0431\u0443\u0447\u0435\u043d\u0438\u0435", color: "#3b82f6" },
+  { name: "\u043e\u0431\u0443\u0447\u0435\u043d\u0438\u0435", color: "#3b82f6", isWork: true },
   { name: "\u043e\u0431\u0449\u0435\u043d\u0438\u0435", color: "#14b8a6" },
   { name: "\u043f\u0440\u043e\u0447\u0435\u0435", color: "#6b7280" },
 ];
@@ -115,7 +111,12 @@ export async function ensureDefaultTags(userId: number): Promise<void> {
   if (existing.length > 0) return;
 
   for (const tag of DEFAULT_TAGS) {
-    await db.insert(tags).values({ ...tag, userId, isDefault: true });
+    await db.insert(tags).values({
+      ...tag,
+      userId,
+      isDefault: true,
+      isWork: tag.isWork ?? false,
+    });
   }
 }
 
@@ -137,7 +138,7 @@ export async function createTag(tag: InsertTag) {
 export async function updateTag(
   id: number,
   userId: number,
-  data: { name?: string; color?: string }
+  data: { name?: string; color?: string; isWork?: boolean }
 ) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
@@ -151,7 +152,12 @@ export async function updateTag(
   return result;
 }
 
-// Time Entries
+export async function deleteTag(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+
+  await db.delete(tags).where(and(eq(tags.id, id), eq(tags.userId, userId)));
+}
 
 export async function upsertTimeEntry(entry: InsertTimeEntry) {
   const db = await getDb();
@@ -216,4 +222,26 @@ export async function deleteTimeEntry(id: number, userId: number) {
   await db
     .delete(timeEntries)
     .where(and(eq(timeEntries.id, id), eq(timeEntries.userId, userId)));
+}
+
+export async function bulkClearTimeEntries(
+  userId: number,
+  cells: { entryDate: string; startTime: string }[]
+) {
+  if (cells.length === 0) return;
+
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+
+  for (const cell of cells) {
+    await db
+      .delete(timeEntries)
+      .where(
+        and(
+          eq(timeEntries.userId, userId),
+          eq(timeEntries.entryDate, cell.entryDate),
+          eq(timeEntries.startTime, cell.startTime)
+        )
+      );
+  }
 }

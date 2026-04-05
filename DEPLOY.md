@@ -49,7 +49,7 @@ git push -u origin main
 
 ## Шаг 4 — Добавление базы данных MySQL
 
-1. В проекте Railway: **+ New Service → Database → PostgreSQL**
+1. В проекте Railway: **+ New Service → Database → MySQL**
 2. После создания скопируйте `DATABASE_URL` из вкладки **Connect**
 
 ---
@@ -60,7 +60,7 @@ git push -u origin main
 
 | Переменная | Значение | Описание |
 |---|---|---|
-| `DATABASE_URL` | `postgresql://...` | Строка подключения к PostgreSQL |
+| `DATABASE_URL` | `mysql://...` | Строка подключения к MySQL |
 | `JWT_SECRET` | случайная строка 64+ символа | Секрет для подписи JWT |
 | `GOOGLE_CLIENT_ID` | из Google Cloud Console | Google OAuth Client ID |
 | `GOOGLE_CLIENT_SECRET` | из Google Cloud Console | Google OAuth Client Secret |

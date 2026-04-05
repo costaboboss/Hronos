@@ -1,0 +1,1 @@
+ALTER TABLE `tags` ADD `isWork` boolean DEFAULT false NOT NULL;

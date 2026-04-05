@@ -33,6 +33,7 @@ export const tags = pgTable("tags", {
   name: varchar("name", { length: 100 }).notNull(),
   color: varchar("color", { length: 20 }).notNull().default("#6366f1"),
   isDefault: boolean("isDefault").notNull().default(false),
+  isWork: boolean("isWork").notNull().default(false),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
 });
 
