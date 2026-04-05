@@ -331,6 +331,26 @@ export default function TrackingPage() {
     toast.success(`Скопировано ${copied.length} блоков`);
   }, []);
 
+  const handleCopyWeek = useCallback(async () => {
+    const weekMatrix = TIME_SLOTS.map((slot) =>
+      daysRef.current.map((day) => {
+        const dateStr = format(day, "yyyy-MM-dd");
+        const key = `${dateStr}_${slot.start}`;
+        const entry = entryMapRef.current[key];
+        return entry?.tagName ?? "";
+      })
+    );
+
+    const text = weekMatrix.map((row) => row.join("\t")).join("\n");
+
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Скопирована вся неделя: 672 ячейки");
+    } catch {
+      toast.error("Не удалось скопировать неделю в буфер");
+    }
+  }, []);
+
   // Process Excel text and paste into target
   const processExcelText = useCallback((text: string, target: { dayIdx: number; slotIdx: number }) => {
     const trimmed = text.trim();
@@ -868,6 +888,16 @@ export default function TrackingPage() {
               <button className="hover:text-white ml-1" onClick={() => { setClipboard(null); clipboardRef.current = null; setPasteTargetDisplay(null); pasteTargetRef.current = null; }}>×</button>
             </div>
           )}
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs gap-1"
+            onClick={handleCopyWeek}
+          >
+            <Copy className="w-3 h-3" />
+            Копировать неделю (672)
+          </Button>
 
           {/* Import button */}
           <Button
