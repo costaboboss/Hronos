@@ -118,6 +118,8 @@ export default function TrackingPage() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importText, setImportText] = useState("");
   const importTargetRef = useRef<{ dayIdx: number; slotIdx: number } | null>(null);
+  const [weekImportDialogOpen, setWeekImportDialogOpen] = useState(false);
+  const [weekImportText, setWeekImportText] = useState("");
 
   // Stable refs for keyboard handler
   const clipboardRef = useRef<ClipEntry[] | null>(null);
@@ -351,6 +353,91 @@ export default function TrackingPage() {
     }
   }, []);
 
+  const processWeekImportText = useCallback((text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return false;
+
+    const lines = trimmed.split(/\r?\n/).filter((line) => line.trim());
+    if (lines.length === 0) return false;
+
+    const tagListCurrent = tagListRef.current;
+    const daysCurrent = daysRef.current;
+    const tagByName: Record<string, TagItem> = {};
+    for (const t of tagListCurrent) tagByName[t.name.toLowerCase()] = t;
+
+    const parsedCells: Array<{
+      dayIdx: number;
+      slotIdx: number;
+      rawName: string;
+      slot: { start: string; end: string };
+    }> = [];
+    const unknownNamesSet = new Set<string>();
+
+    lines.forEach((line, rowIdx) => {
+      if (rowIdx >= TIME_SLOTS.length) return;
+
+      const parts = line.split("\t");
+      const columns =
+        parts.length >= 8 && /^\d{1,2}:\d{2}$/.test(parts[0].trim()) ? parts.slice(1, 8) : parts.slice(0, 7);
+
+      for (let dayIdx = 0; dayIdx < Math.min(columns.length, 7); dayIdx++) {
+        const rawName = columns[dayIdx].trim();
+        parsedCells.push({
+          dayIdx,
+          slotIdx: rowIdx,
+          rawName,
+          slot: TIME_SLOTS[rowIdx],
+        });
+        if (rawName && !tagByName[rawName.toLowerCase()]) {
+          unknownNamesSet.add(rawName);
+        }
+      }
+    });
+
+    const doUpsert = (tagMap: Record<string, TagItem>) => {
+      const entries = parsedCells.map((cell) => {
+        const dateStr = format(daysCurrent[cell.dayIdx], "yyyy-MM-dd");
+        const matched = tagMap[cell.rawName.toLowerCase()];
+        return {
+          entryDate: dateStr,
+          startTime: cell.slot.start,
+          endTime: cell.slot.end,
+          tagId: matched?.id ?? null,
+          tagName: matched?.name ?? (cell.rawName || null),
+        };
+      });
+
+      bulkMutation.mutate(entries);
+      const newCount = unknownNamesSet.size;
+      toast.success(
+        newCount > 0
+          ? `Импортирована вся неделя: ${entries.length} ячеек. Создано тегов: ${newCount}`
+          : `Импортирована вся неделя: ${entries.length} ячеек`
+      );
+      setWeekImportDialogOpen(false);
+      setWeekImportText("");
+    };
+
+    if (unknownNamesSet.size > 0) {
+      const toCreate = Array.from(unknownNamesSet).map((name, i) => ({
+        name,
+        color: COLORS[i % COLORS.length],
+      }));
+      createManyTagsMutation.mutate(toCreate, {
+        onSuccess: (created) => {
+          const updatedMap = { ...tagByName };
+          for (const t of created) updatedMap[t.name.toLowerCase()] = t as TagItem;
+          doUpsert(updatedMap);
+        },
+        onError: () => doUpsert(tagByName),
+      });
+    } else {
+      doUpsert(tagByName);
+    }
+
+    return true;
+  }, [bulkMutation, createManyTagsMutation]);
+
   // Process Excel text and paste into target
   const processExcelText = useCallback((text: string, target: { dayIdx: number; slotIdx: number }) => {
     const trimmed = text.trim();
@@ -451,6 +538,11 @@ export default function TrackingPage() {
     setImportText("");
     setActiveCell(null);
   }, [importText, processExcelText]);
+
+  const handleWeekImportConfirm = useCallback(() => {
+    if (!weekImportText.trim()) return;
+    processWeekImportText(weekImportText);
+  }, [processWeekImportText, weekImportText]);
 
   // Week navigation
   const prevWeek = () => setWeekMonday(d => addWeeks(d, -1));
@@ -897,6 +989,16 @@ export default function TrackingPage() {
           >
             <Copy className="w-3 h-3" />
             Копировать неделю (672)
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs gap-1"
+            onClick={() => setWeekImportDialogOpen(true)}
+          >
+            <FileInput className="w-3 h-3" />
+            Импортировать всю неделю
           </Button>
 
           {/* Import button */}
@@ -1351,6 +1453,39 @@ export default function TrackingPage() {
             <Button variant="outline" onClick={() => { setImportDialogOpen(false); setActiveCell(null); }}>Отмена</Button>
             <Button onClick={handleImportConfirm} disabled={!importText.trim()}>
               Вставить {importText.trim() ? `(${importText.trim().split(/\r?\n/).filter(l => l.trim()).length} строк)` : ""}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={weekImportDialogOpen} onOpenChange={(open) => { setWeekImportDialogOpen(open); if (!open) setWeekImportText(""); }}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Импортировать всю неделю</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Вставьте сюда всю неделю целиком: <code className="text-xs bg-muted px-1 rounded">96 строк × 7 столбцов</code>.
+              Каждый столбец — это день недели, каждая строка — один 15-минутный слот.
+              Если из Excel прилетит ещё первый столбец со временем, он тоже поддерживается.
+            </p>
+            <textarea
+              className="w-full h-80 p-2 text-sm font-mono bg-input border border-border rounded resize-none focus:outline-none focus:ring-1 focus:ring-primary text-foreground"
+              placeholder={"сон\tсон\tсон\tсон\tсон\tсон\tсон\nсон\tсон\tсон\tсон\tсон\tсон\tсон\nработа\tработа\tтактика\tтактика\tработа\tотдых\tотдых\n..."}
+              value={weekImportText}
+              onChange={e => setWeekImportText(e.target.value)}
+              autoFocus
+            />
+            <p className="text-xs text-muted-foreground">
+              Импорт заполнит текущую открытую неделю целиком. Неизвестные теги будут созданы автоматически.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setWeekImportDialogOpen(false); setWeekImportText(""); }}>
+              Отмена
+            </Button>
+            <Button onClick={handleWeekImportConfirm} disabled={!weekImportText.trim()}>
+              Импортировать неделю
             </Button>
           </DialogFooter>
         </DialogContent>
