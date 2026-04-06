@@ -94,6 +94,14 @@ export default function TrackingPage() {
   const [dragState, setDragState] = useState<{
     startDay: number; endDay: number; startSlot: number; endSlot: number; active: boolean;
   } | null>(null);
+  const [fillDownState, setFillDownState] = useState<{
+    dayIdx: number;
+    dateStr: string;
+    startSlot: number;
+    endSlot: number;
+    tag: TagItem;
+    active: boolean;
+  } | null>(null);
 
   // Unified floating tag menu (single-cell click OR multi-select drag)
   const [multiMenuOpen, setMultiMenuOpen] = useState(false);
@@ -127,6 +135,14 @@ export default function TrackingPage() {
   const daysRef = useRef<Date[]>([]);
   const entryMapRef = useRef<EntryMap>({});
   const tagListRef = useRef<TagItem[]>([]);
+  const fillDownRef = useRef<{
+    dayIdx: number;
+    dateStr: string;
+    startSlot: number;
+    endSlot: number;
+    tag: TagItem;
+    active: boolean;
+  } | null>(null);
 
   const days = useMemo(() => getWeekDays(weekMonday), [weekMonday]);
   const weekNum = getISOWeek(weekMonday);
@@ -134,6 +150,7 @@ export default function TrackingPage() {
   useEffect(() => { daysRef.current = days; }, [days]);
   useEffect(() => { clipboardRef.current = clipboard; }, [clipboard]);
   useEffect(() => { selectionRef.current = selection; }, [selection]);
+  useEffect(() => { fillDownRef.current = fillDownState; }, [fillDownState]);
 
   const startDate = format(weekMonday, "yyyy-MM-dd");
   const endDate = format(days[6], "yyyy-MM-dd");
@@ -578,6 +595,15 @@ export default function TrackingPage() {
   };
 
   const onSlotMouseEnter = (dayIdx: number, slotIdx: number) => {
+    if (fillDownState?.active) {
+      if (dayIdx === fillDownState.dayIdx) {
+        wasDragRef.current = true;
+        setFillDownState((s) =>
+          s ? { ...s, endSlot: Math.max(slotIdx, s.startSlot) } : s
+        );
+      }
+      return;
+    }
     if (dragState?.active) {
       wasDragRef.current = true; // moved to another cell = drag
       setDragState(s => s ? { ...s, endDay: dayIdx, endSlot: slotIdx } : s);
@@ -585,6 +611,23 @@ export default function TrackingPage() {
   };
 
   const onSlotMouseUp = (dayIdx: number, slotIdx: number, e?: React.MouseEvent) => {
+    if (fillDownState?.active) {
+      const endSlot = Math.max(slotIdx, fillDownState.startSlot);
+      if (endSlot > fillDownState.startSlot) {
+        const startFill = fillDownState.startSlot + 1;
+        handleBulkSet(fillDownState.dateStr, startFill, endSlot, fillDownState.tag);
+        const newSel = {
+          startDay: fillDownState.dayIdx,
+          endDay: fillDownState.dayIdx,
+          start: fillDownState.startSlot,
+          end: endSlot,
+        };
+        setSelection(newSel);
+        selectionRef.current = newSel;
+      }
+      setFillDownState(null);
+      return;
+    }
     if (!dragState?.active) return;
     const minDay = Math.min(dragState.startDay, dayIdx);
     const maxDay = Math.max(dragState.startDay, dayIdx);
@@ -605,6 +648,32 @@ export default function TrackingPage() {
     }
     setDragState(null);
   };
+
+  const startFillDown = useCallback(
+    (
+      dayIdx: number,
+      slotIdx: number,
+      dateStr: string,
+      tag: TagItem,
+      e: React.MouseEvent
+    ) => {
+      e.preventDefault();
+      e.stopPropagation();
+      wasDragRef.current = true;
+      setMultiMenuOpen(false);
+      setMultiMenuPos(null);
+      setMenuCell(null);
+      setFillDownState({
+        dayIdx,
+        dateStr,
+        startSlot: slotIdx,
+        endSlot: slotIdx,
+        tag,
+        active: true,
+      });
+    },
+    []
+  );
 
   // Set paste target — called synchronously on click
   const setPasteTarget = useCallback((dayIdx: number, slotIdx: number) => {
@@ -896,11 +965,30 @@ export default function TrackingPage() {
 
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("paste", handlePaste);
+    const handleWindowMouseUp = () => {
+      const fill = fillDownRef.current;
+      if (!fill?.active) return;
+      if (fill.endSlot > fill.startSlot) {
+        const startFill = fill.startSlot + 1;
+        handleBulkSet(fill.dateStr, startFill, fill.endSlot, fill.tag);
+        const newSel = {
+          startDay: fill.dayIdx,
+          endDay: fill.dayIdx,
+          start: fill.startSlot,
+          end: fill.endSlot,
+        };
+        setSelection(newSel);
+        selectionRef.current = newSel;
+      }
+      setFillDownState(null);
+    };
+    window.addEventListener("mouseup", handleWindowMouseUp);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("paste", handlePaste);
+      window.removeEventListener("mouseup", handleWindowMouseUp);
     };
-  }, [processExcelText, pasteInternal]);
+  }, [handleBulkSet, pasteInternal, processExcelText]);
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -1092,15 +1180,32 @@ export default function TrackingPage() {
                       const isWeekend = di >= 5;
                       const isActive = activeCell?.dayIdx === di && activeCell?.slotIdx === si;
                       const isPaste = isPastePreview(di, si);
+                      const isSingleSelectedCell =
+                        !!selection &&
+                        selection.startDay === selection.endDay &&
+                        selection.start === selection.end &&
+                        selection.startDay === di &&
+                        selection.start === si;
+                      const isFillSource =
+                        fillDownState?.active &&
+                        fillDownState.dayIdx === di &&
+                        fillDownState.startSlot === si;
+                      const isFillPreview =
+                        fillDownState?.active &&
+                        fillDownState.dayIdx === di &&
+                        si > fillDownState.startSlot &&
+                        si <= fillDownState.endSlot;
 
                       return (
                         <ContextMenu key={di}>
                           <ContextMenuTrigger asChild>
                             <td
-                              className={`border-r border-border/20 relative cursor-pointer ${isWeekend ? "bg-muted/5" : ""} ${highlighted ? "bg-primary/25" : ""} ${selected && !highlighted ? "bg-primary/15 outline outline-1 outline-primary/40" : ""} ${isPaste && !highlighted ? "outline outline-1 outline-green-400/60" : ""}`}
+                              className={`border-r border-border/20 relative cursor-pointer ${isWeekend ? "bg-muted/5" : ""} ${highlighted ? "bg-primary/25" : ""} ${selected && !highlighted ? "bg-primary/15 outline outline-1 outline-primary/40" : ""} ${isPaste && !highlighted ? "outline outline-1 outline-green-400/60" : ""} ${isFillPreview ? "outline outline-1 outline-cyan-400/60" : ""}`}
                               style={{
                                 backgroundColor: isActive && !highlighted
                                   ? "rgba(34,211,238,0.18)"
+                                  : isFillPreview
+                                    ? (tag ? tag.color + "40" : "rgba(34,211,238,0.15)")
                                   : isPaste && !highlighted
                                     ? "rgba(74,222,128,0.15)"
                                     : (!highlighted && !selected && tag ? tag.color + "33" : undefined),
@@ -1126,6 +1231,14 @@ export default function TrackingPage() {
                                 >
                                   {tag.name}
                                 </span>
+                              )}
+                              {tag && isSingleSelectedCell && (
+                                <button
+                                  type="button"
+                                  className={`absolute bottom-0.5 right-0.5 z-10 h-2.5 w-2.5 rounded-sm border border-cyan-300 ${isFillSource ? "bg-cyan-300" : "bg-cyan-400"} shadow-sm`}
+                                  onMouseDown={(e) => startFillDown(di, si, dateStr, tag, e)}
+                                  title="Протянуть вниз"
+                                />
                               )}
                             </td>
                           </ContextMenuTrigger>
