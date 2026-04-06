@@ -1175,10 +1175,10 @@ export default function TrackingPage() {
       {isLoading ? (
         <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">Загрузка...</div>
       ) : (
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-y-auto overflow-x-hidden">
           {/* ── Main grid ── */}
           <div
-            className="flex-1 overflow-auto"
+            className="flex-1 overflow-x-auto overflow-y-visible"
             style={{ userSelect: "none" }}
             onMouseLeave={() => { if (dragState?.active) setDragState(null); }}
             onMouseUp={() => { if (dragState?.active) setDragState(null); }}
@@ -1355,7 +1355,7 @@ export default function TrackingPage() {
           </div>
 
           {/* ── Right sidebar: tag stats + work blocks ── */}
-          <div className="flex-shrink-0 w-52 border-l border-border bg-background flex flex-col min-h-0">
+          <div className="flex-shrink-0 w-52 border-l border-border bg-background flex flex-col self-start sticky top-0">
 
             {/* ── Work blocks panel (top) ── */}
             <div className="sticky top-0 z-20 bg-background border-b border-border shadow-[0_8px_18px_rgba(0,0,0,0.28)]">
