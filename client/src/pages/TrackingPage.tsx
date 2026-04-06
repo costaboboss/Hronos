@@ -601,7 +601,7 @@ export default function TrackingPage() {
       if (dayIdx === fillDownState.dayIdx) {
         wasDragRef.current = true;
         setFillDownState((s) =>
-          s ? { ...s, endSlot: Math.max(slotIdx, s.startSlot) } : s
+          s ? { ...s, endSlot: slotIdx } : s
         );
       }
       return;
@@ -614,18 +614,22 @@ export default function TrackingPage() {
 
   const onSlotMouseUp = (dayIdx: number, slotIdx: number, e?: React.MouseEvent) => {
     if (fillDownState?.active) {
-      const endSlot = Math.max(slotIdx, fillDownState.startSlot);
-      if (endSlot > fillDownState.startSlot) {
-        const startFill = fillDownState.startSlot + 1;
-        handleBulkSet(fillDownState.dateStr, startFill, endSlot, fillDownState.tag);
+      const rangeStart = Math.min(slotIdx, fillDownState.startSlot);
+      const rangeEnd = Math.max(slotIdx, fillDownState.startSlot);
+      if (rangeStart !== rangeEnd) {
+        handleBulkSet(fillDownState.dateStr, rangeStart, rangeEnd, fillDownState.tag);
         const newSel = {
           startDay: fillDownState.dayIdx,
           endDay: fillDownState.dayIdx,
-          start: fillDownState.startSlot,
-          end: endSlot,
+          start: rangeStart,
+          end: rangeEnd,
         };
         setSelection(newSel);
         selectionRef.current = newSel;
+        setActiveCell({
+          dayIdx: fillDownState.dayIdx,
+          slotIdx,
+        });
       }
       setFillDownState(null);
       return;
@@ -1004,23 +1008,28 @@ export default function TrackingPage() {
 
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("paste", handlePaste);
-    const handleWindowMouseUp = () => {
-      const fill = fillDownRef.current;
-      if (!fill?.active) return;
-      if (fill.endSlot > fill.startSlot) {
-        const startFill = fill.startSlot + 1;
-        handleBulkSet(fill.dateStr, startFill, fill.endSlot, fill.tag);
-        const newSel = {
-          startDay: fill.dayIdx,
-          endDay: fill.dayIdx,
-          start: fill.startSlot,
-          end: fill.endSlot,
-        };
-        setSelection(newSel);
-        selectionRef.current = newSel;
-      }
-      setFillDownState(null);
-    };
+      const handleWindowMouseUp = () => {
+        const fill = fillDownRef.current;
+        if (!fill?.active) return;
+        const rangeStart = Math.min(fill.startSlot, fill.endSlot);
+        const rangeEnd = Math.max(fill.startSlot, fill.endSlot);
+        if (rangeStart !== rangeEnd) {
+          handleBulkSet(fill.dateStr, rangeStart, rangeEnd, fill.tag);
+          const newSel = {
+            startDay: fill.dayIdx,
+            endDay: fill.dayIdx,
+            start: rangeStart,
+            end: rangeEnd,
+          };
+          setSelection(newSel);
+          selectionRef.current = newSel;
+          setActiveCell({
+            dayIdx: fill.dayIdx,
+            slotIdx: fill.endSlot,
+          });
+        }
+        setFillDownState(null);
+      };
     window.addEventListener("mouseup", handleWindowMouseUp);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
@@ -1232,8 +1241,8 @@ export default function TrackingPage() {
                       const isFillPreview =
                         fillDownState?.active &&
                         fillDownState.dayIdx === di &&
-                        si > fillDownState.startSlot &&
-                        si <= fillDownState.endSlot;
+                        si >= Math.min(fillDownState.startSlot, fillDownState.endSlot) &&
+                        si <= Math.max(fillDownState.startSlot, fillDownState.endSlot);
 
                       return (
                         <ContextMenu key={di}>
