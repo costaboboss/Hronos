@@ -128,6 +128,14 @@ export default function TrackingPage() {
   const importTargetRef = useRef<{ dayIdx: number; slotIdx: number } | null>(null);
   const [weekImportDialogOpen, setWeekImportDialogOpen] = useState(false);
   const [weekImportText, setWeekImportText] = useState("");
+  const headerRef = useRef<HTMLDivElement | null>(null);
+  const sidebarHostRef = useRef<HTMLDivElement | null>(null);
+  const [sidebarFrame, setSidebarFrame] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  } | null>(null);
 
   // Stable refs for keyboard handler
   const clipboardRef = useRef<ClipEntry[] | null>(null);
@@ -153,6 +161,42 @@ export default function TrackingPage() {
   useEffect(() => { selectionRef.current = selection; }, [selection]);
   useEffect(() => { activeCellRef.current = activeCell; }, [activeCell]);
   useEffect(() => { fillDownRef.current = fillDownState; }, [fillDownState]);
+
+  useEffect(() => {
+    const measureSidebarFrame = () => {
+      if (!headerRef.current || !sidebarHostRef.current) return;
+
+      const headerRect = headerRef.current.getBoundingClientRect();
+      const hostRect = sidebarHostRef.current.getBoundingClientRect();
+      const top = Math.max(headerRect.bottom, 0);
+
+      setSidebarFrame({
+        top,
+        left: hostRect.left,
+        width: hostRect.width,
+        height: Math.max(window.innerHeight - top, 0),
+      });
+    };
+
+    measureSidebarFrame();
+
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => measureSidebarFrame())
+        : null;
+
+    if (headerRef.current) resizeObserver?.observe(headerRef.current);
+    if (sidebarHostRef.current) resizeObserver?.observe(sidebarHostRef.current);
+
+    window.addEventListener("resize", measureSidebarFrame);
+    window.addEventListener("scroll", measureSidebarFrame, true);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", measureSidebarFrame);
+      window.removeEventListener("scroll", measureSidebarFrame, true);
+    };
+  }, []);
 
   const startDate = format(weekMonday, "yyyy-MM-dd");
   const endDate = format(days[6], "yyyy-MM-dd");
@@ -1041,7 +1085,7 @@ export default function TrackingPage() {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* ── Header ── */}
-      <div className="flex-shrink-0 px-4 py-2 border-b border-border bg-background">
+        <div ref={headerRef} className="flex-shrink-0 px-4 py-2 border-b border-border bg-background">
         <div className="flex items-center gap-3 flex-wrap">
           {/* Week nav */}
           <div className="flex items-center gap-1">
@@ -1355,8 +1399,21 @@ export default function TrackingPage() {
           </div>
 
           {/* ── Right sidebar: tag stats + work blocks ── */}
-          <div className="flex-shrink-0 w-52 border-l border-border bg-background">
-            <div className="sticky top-0">
+          <div ref={sidebarHostRef} className="relative flex-shrink-0 w-52">
+            <div
+              className="border-l border-border bg-background overflow-y-auto"
+              style={
+                sidebarFrame
+                  ? {
+                      position: "fixed",
+                      top: sidebarFrame.top,
+                      left: sidebarFrame.left,
+                      width: sidebarFrame.width,
+                      height: sidebarFrame.height,
+                    }
+                  : undefined
+              }
+            >
 
             {/* ── Work blocks panel (top) ── */}
             <div className="border-b border-border bg-background">
