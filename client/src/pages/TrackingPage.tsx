@@ -1355,7 +1355,8 @@ export default function TrackingPage() {
           </div>
 
           {/* ── Right sidebar: tag stats + work blocks ── */}
-          <div className="flex-shrink-0 w-52 border-l border-border bg-background self-start sticky top-0">
+          <div className="flex-shrink-0 w-52 border-l border-border bg-background">
+            <div className="sticky top-0">
 
             {/* ── Work blocks panel (top) ── */}
             <div className="border-b border-border bg-background">
@@ -1483,6 +1484,7 @@ export default function TrackingPage() {
             )}
             </div>
 
+            </div>
           </div>
         </div>
       )}
