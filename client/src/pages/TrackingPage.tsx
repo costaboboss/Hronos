@@ -141,8 +141,14 @@ export default function TrackingPage() {
   const importTargetRef = useRef<{ dayIdx: number; slotIdx: number } | null>(null);
   const [weekImportDialogOpen, setWeekImportDialogOpen] = useState(false);
   const [weekImportText, setWeekImportText] = useState("");
+  const headerHostRef = useRef<HTMLDivElement | null>(null);
   const headerRef = useRef<HTMLDivElement | null>(null);
   const sidebarHostRef = useRef<HTMLDivElement | null>(null);
+  const [headerFrame, setHeaderFrame] = useState<{
+    left: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const [sidebarFrame, setSidebarFrame] = useState<{
     top: number;
     left: number;
@@ -188,6 +194,19 @@ export default function TrackingPage() {
   }, []);
 
   useEffect(() => {
+    const measureHeaderFrame = () => {
+      if (!headerHostRef.current || !headerRef.current) return;
+
+      const hostRect = headerHostRef.current.getBoundingClientRect();
+      const headerHeight = headerRef.current.offsetHeight;
+
+      setHeaderFrame({
+        left: hostRect.left,
+        width: hostRect.width,
+        height: headerHeight,
+      });
+    };
+
     const measureSidebarFrame = () => {
       if (!headerRef.current || !sidebarHostRef.current) return;
 
@@ -203,23 +222,33 @@ export default function TrackingPage() {
       });
     };
 
+    measureHeaderFrame();
     measureSidebarFrame();
 
     const resizeObserver =
       typeof ResizeObserver !== "undefined"
-        ? new ResizeObserver(() => measureSidebarFrame())
+        ? new ResizeObserver(() => {
+            measureHeaderFrame();
+            measureSidebarFrame();
+          })
         : null;
 
+    if (headerHostRef.current) resizeObserver?.observe(headerHostRef.current);
     if (headerRef.current) resizeObserver?.observe(headerRef.current);
     if (sidebarHostRef.current) resizeObserver?.observe(sidebarHostRef.current);
 
-    window.addEventListener("resize", measureSidebarFrame);
-    window.addEventListener("scroll", measureSidebarFrame, true);
+    const handleFrameMeasure = () => {
+      measureHeaderFrame();
+      measureSidebarFrame();
+    };
+
+    window.addEventListener("resize", handleFrameMeasure);
+    window.addEventListener("scroll", handleFrameMeasure, true);
 
     return () => {
       resizeObserver?.disconnect();
-      window.removeEventListener("resize", measureSidebarFrame);
-      window.removeEventListener("scroll", measureSidebarFrame, true);
+      window.removeEventListener("resize", handleFrameMeasure);
+      window.removeEventListener("scroll", handleFrameMeasure, true);
     };
   }, []);
 
@@ -1328,7 +1357,22 @@ export default function TrackingPage() {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* ── Header ── */}
-        <div ref={headerRef} className="flex-shrink-0 px-4 py-2 border-b border-border bg-background">
+      <div ref={headerHostRef} className="flex-shrink-0" style={{ height: headerFrame?.height }}>
+        <div
+          ref={headerRef}
+          className="px-4 py-2 border-b border-border bg-background"
+          style={
+            headerFrame
+              ? {
+                  position: "fixed",
+                  top: 0,
+                  left: headerFrame.left,
+                  width: headerFrame.width,
+                  zIndex: 45,
+                }
+              : undefined
+          }
+        >
         <div className="flex items-center gap-3 flex-wrap">
           {/* Week nav */}
           <div className="flex items-center gap-1">
@@ -1535,6 +1579,7 @@ export default function TrackingPage() {
             <span className="text-xs text-muted-foreground w-6 text-right">{rowHeight}</span>
           </div>
         </div>
+        </div>
       </div>
 
       {/* ── Grid + Sidebar ── */}
@@ -1550,7 +1595,7 @@ export default function TrackingPage() {
             onMouseUp={() => { if (dragState?.active) setDragState(null); }}
           >
           <table className="w-full border-collapse table-fixed" style={{ minWidth: 700 }}>
-            <thead className="sticky top-0 z-20 bg-background">
+            <thead className="sticky z-20 bg-background" style={{ top: headerFrame?.height ?? 0 }}>
               <tr>
                 <th className="border-b border-r border-border bg-background" style={{ width: 52 }} />
                 {days.map((day, di) => {
