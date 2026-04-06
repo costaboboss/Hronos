@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Briefcase, Tag, Plus, Pencil, Check, X } from "lucide-react";
+import { getTagGoals, setTagGoal } from "@/lib/planning";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -55,6 +56,11 @@ export default function TagsPage() {
 
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState(COLORS[0]);
+  const [tagGoals, setTagGoals] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    setTagGoals(getTagGoals());
+  }, []);
 
   const workTags = (tagList as TagItem[]).filter(t => t.isWork);
   const nonWorkTags = (tagList as TagItem[]).filter(t => !t.isWork);
@@ -120,6 +126,7 @@ export default function TagsPage() {
               <TagRow
                 key={tag.id}
                 tag={tag}
+                goalHours={tagGoals[String(tag.id)] ?? null}
                 isEditing={editingId === tag.id}
                 editName={editName}
                 editColor={editColor}
@@ -129,6 +136,7 @@ export default function TagsPage() {
                 onSaveEdit={() => saveEdit(tag)}
                 onCancelEdit={cancelEdit}
                 onToggleWork={() => toggleWork(tag)}
+                onGoalChange={(hours) => setTagGoals(setTagGoal(tag.id, hours))}
               />
             ))}
           </div>
@@ -148,6 +156,7 @@ export default function TagsPage() {
             <TagRow
               key={tag.id}
               tag={tag}
+              goalHours={tagGoals[String(tag.id)] ?? null}
               isEditing={editingId === tag.id}
               editName={editName}
               editColor={editColor}
@@ -157,6 +166,7 @@ export default function TagsPage() {
               onSaveEdit={() => saveEdit(tag)}
               onCancelEdit={cancelEdit}
               onToggleWork={() => toggleWork(tag)}
+              onGoalChange={(hours) => setTagGoals(setTagGoal(tag.id, hours))}
             />
           ))}
         </div>
@@ -204,6 +214,7 @@ export default function TagsPage() {
 
 function TagRow({
   tag,
+  goalHours,
   isEditing,
   editName,
   editColor,
@@ -213,8 +224,10 @@ function TagRow({
   onSaveEdit,
   onCancelEdit,
   onToggleWork,
+  onGoalChange,
 }: {
   tag: TagItem;
+  goalHours: number | null;
   isEditing: boolean;
   editName: string;
   editColor: string;
@@ -224,6 +237,7 @@ function TagRow({
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   onToggleWork: () => void;
+  onGoalChange: (hours: number | null) => void;
 }) {
   return (
     <div className={`flex items-center gap-3 px-3 py-2 rounded-lg border transition-colors ${tag.isWork ? "border-amber-400/30 bg-amber-400/5" : "border-border bg-card/50"} hover:bg-muted/20`}>
@@ -262,6 +276,23 @@ function TagRow({
           рабочий
         </Badge>
       )}
+
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        <span className="text-[10px] text-muted-foreground">Р¦РµР»СЊ</span>
+        <Input
+          type="number"
+          min={0}
+          step={0.5}
+          value={goalHours ?? ""}
+          onChange={e => {
+            const raw = e.target.value.trim();
+            onGoalChange(raw ? Number(raw) : null);
+          }}
+          placeholder="0"
+          className="h-7 w-16 text-xs bg-input"
+        />
+        <span className="text-[10px] text-muted-foreground">С‡</span>
+      </div>
 
       {/* Actions */}
       <div className="flex items-center gap-2 flex-shrink-0">

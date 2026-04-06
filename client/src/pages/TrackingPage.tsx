@@ -9,8 +9,17 @@ import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { getEfficiencyColor, getEfficiencyTextClass } from "@/lib/efficiency";
 import { blocksToHours, blocksToPercent, useWorkNorm } from "@/lib/workNorm";
+import {
+  getDayTemplates,
+  getTagGoals,
+  getWeekTemplates,
+  saveDayTemplate,
+  saveWeekTemplate,
+  type DayTemplate,
+  type WeekTemplate,
+} from "@/lib/planning";
 import { toast } from "sonner";
-import { Plus, Copy, Clipboard, ChevronLeft, ChevronRight, Trash2, FileInput } from "lucide-react";
+import { Plus, Copy, Clipboard, ChevronLeft, ChevronRight, Trash2, FileInput, Target, Save, BookCopy, AlertTriangle } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -74,6 +83,10 @@ type TagItem = { id: number; name: string; color: string; isDefault: boolean; is
 type EntryMap = Record<string, { tagId: number | null; tagName: string | null }>;
 type ClipEntry = { offset: number; tag: TagItem | null };
 
+function getEntryTagName(map: EntryMap, dateStr: string, slotIdx: number) {
+  return map[`${dateStr}_${TIME_SLOTS[slotIdx].start}`]?.tagName ?? null;
+}
+
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
@@ -136,6 +149,13 @@ export default function TrackingPage() {
     width: number;
     height: number;
   } | null>(null);
+  const [showGaps, setShowGaps] = useState(true);
+  const [gapCursor, setGapCursor] = useState(0);
+  const [dayTemplates, setDayTemplates] = useState<DayTemplate[]>([]);
+  const [weekTemplates, setWeekTemplates] = useState<WeekTemplate[]>([]);
+  const [selectedDayTemplateId, setSelectedDayTemplateId] = useState<string>("none");
+  const [selectedWeekTemplateId, setSelectedWeekTemplateId] = useState<string>("none");
+  const [tagGoals, setTagGoals] = useState<Record<string, number>>({});
 
   // Stable refs for keyboard handler
   const clipboardRef = useRef<ClipEntry[] | null>(null);
@@ -161,6 +181,11 @@ export default function TrackingPage() {
   useEffect(() => { selectionRef.current = selection; }, [selection]);
   useEffect(() => { activeCellRef.current = activeCell; }, [activeCell]);
   useEffect(() => { fillDownRef.current = fillDownState; }, [fillDownState]);
+  useEffect(() => {
+    setDayTemplates(getDayTemplates());
+    setWeekTemplates(getWeekTemplates());
+    setTagGoals(getTagGoals());
+  }, []);
 
   useEffect(() => {
     const measureSidebarFrame = () => {
@@ -380,6 +405,36 @@ export default function TrackingPage() {
     createTagMutation.mutate({ name, color: COLORS[Math.floor(Math.random() * COLORS.length)] });
     toast.success(`Тег «${name}» создан`);
   }, [createTagMutation]);
+
+  const applyTagToCurrentSelection = useCallback((tag: TagItem | null) => {
+    const sel = selectionRef.current;
+    const cell = activeCellRef.current;
+
+    if (sel) {
+      const entries = [];
+      for (let d = sel.startDay; d <= sel.endDay; d++) {
+        const dateStr = format(daysRef.current[d], "yyyy-MM-dd");
+        for (let i = sel.start; i <= sel.end; i++) {
+          const slot = TIME_SLOTS[i];
+          entries.push({
+            entryDate: dateStr,
+            startTime: slot.start,
+            endTime: slot.end,
+            tagId: tag?.id ?? null,
+            tagName: tag?.name ?? null,
+          });
+        }
+      }
+      bulkMutation.mutate(entries);
+      toast.success(tag ? `В«${tag.name}В» в†’ ${entries.length} Р±Р»РѕРєРѕРІ` : `РћС‡РёС‰РµРЅРѕ ${entries.length} Р±Р»РѕРєРѕРІ`);
+      return;
+    }
+
+    if (cell) {
+      const dateStr = format(daysRef.current[cell.dayIdx], "yyyy-MM-dd");
+      handleSetEntry(dateStr, cell.slotIdx, tag);
+    }
+  }, [bulkMutation, handleSetEntry]);
 
   const handleCopy = useCallback(() => {
     const sel = selectionRef.current;
@@ -844,6 +899,74 @@ export default function TrackingPage() {
     );
   }, [tagStats, tagList]);
 
+  const hotkeyTags = useMemo(
+    () =>
+      tagStats.reduce<(typeof tagList)[number][]>((acc, stat) => {
+        const tag = tagList.find((item) => item.name === stat.name);
+        if (tag) acc.push(tag);
+        return acc;
+      }, []).slice(0, 9),
+    [tagStats, tagList]
+  );
+
+  const unfilledGaps = useMemo(() => {
+    const gaps: Array<{ dayIdx: number; slotIdx: number; dateStr: string; label: string }> = [];
+
+    days.forEach((day, dayIdx) => {
+      const dateStr = format(day, "yyyy-MM-dd");
+      const filledSlots = TIME_SLOTS
+        .map((_, slotIdx) => (getEntryTagName(entryMap, dateStr, slotIdx) ? slotIdx : -1))
+        .filter((slotIdx) => slotIdx >= 0);
+
+      if (filledSlots.length < 2) return;
+
+      const firstFilled = filledSlots[0];
+      const lastFilled = filledSlots[filledSlots.length - 1];
+      for (let slotIdx = firstFilled; slotIdx <= lastFilled; slotIdx++) {
+        if (!getEntryTagName(entryMap, dateStr, slotIdx)) {
+          gaps.push({
+            dayIdx,
+            slotIdx,
+            dateStr,
+            label: `${DAY_LABELS[dayIdx]} ${TIME_SLOTS[slotIdx].start}`,
+          });
+        }
+      }
+    });
+
+    return gaps;
+  }, [days, entryMap]);
+
+  const gapKeySet = useMemo(() => new Set(unfilledGaps.map((gap) => `${gap.dateStr}_${TIME_SLOTS[gap.slotIdx].start}`)), [unfilledGaps]);
+
+  const tagGoalRows = useMemo(() => {
+    const todayCounts: Record<number, number> = {};
+    for (const entry of todayEntries) {
+      if (entry.tagId) todayCounts[entry.tagId] = (todayCounts[entry.tagId] ?? 0) + 1;
+    }
+
+    return tagList
+      .map((tag) => {
+        const goalHours = tagGoals[String(tag.id)];
+        if (!goalHours) return null;
+
+        const actualBlocks = todayCounts[tag.id] ?? 0;
+        const goalBlocks = goalHours * 4;
+        const pct = goalBlocks > 0 ? Math.min(100, Math.round((actualBlocks / goalBlocks) * 100)) : 0;
+
+        return {
+          id: tag.id,
+          name: tag.name,
+          color: tag.color,
+          goalHours,
+          actualHours: blocksToHours(actualBlocks),
+          pct,
+        };
+      })
+      .filter((row): row is { id: number; name: string; color: string; goalHours: number; actualHours: number; pct: number } => !!row)
+      .sort((a, b) => b.goalHours - a.goalHours);
+  }, [tagGoals, tagList, todayEntries]);
+
   // Today's work blocks stats (uses dedicated todayEntries query, independent of selected week)
   const workBlocksToday = useMemo(() => {
     const workTagIds = new Set((tagList as TagItem[]).filter(t => t.isWork).map(t => t.id));
@@ -940,12 +1063,131 @@ export default function TrackingPage() {
     ? Math.round(selectedWeekEfficiency.reduce((sum, day) => sum + day.pct, 0) / selectedWeekEfficiency.length)
     : 0;
 
+  const focusCell = useCallback((dayIdx: number, slotIdx: number) => {
+    const dateStr = format(daysRef.current[dayIdx], "yyyy-MM-dd");
+    const nextSelection = { startDay: dayIdx, endDay: dayIdx, start: slotIdx, end: slotIdx };
+    setSelection(nextSelection);
+    selectionRef.current = nextSelection;
+    setActiveCell({ dayIdx, slotIdx });
+    setPasteTarget(dayIdx, slotIdx);
+    setMenuCell(null);
+    setMultiMenuOpen(false);
+    setMultiMenuPos(null);
+
+    requestAnimationFrame(() => {
+      const node = document.querySelector<HTMLElement>(`[data-grid-cell="${dateStr}_${TIME_SLOTS[slotIdx].start}"]`);
+      node?.scrollIntoView({ block: "center", inline: "nearest" });
+    });
+  }, [setPasteTarget]);
+
+  const jumpToNextGap = useCallback(() => {
+    if (unfilledGaps.length === 0) {
+      toast.success("РџСѓСЃС‚РѕС‚ РЅРµС‚");
+      return;
+    }
+
+    const nextIndex = gapCursor % unfilledGaps.length;
+    const gap = unfilledGaps[nextIndex];
+    focusCell(gap.dayIdx, gap.slotIdx);
+    setGapCursor(nextIndex + 1);
+  }, [focusCell, gapCursor, unfilledGaps]);
+
+  const saveCurrentDayTemplate = useCallback(() => {
+    const targetDayIdx = activeCellRef.current?.dayIdx ?? selectionRef.current?.startDay ?? 0;
+    const dateStr = format(daysRef.current[targetDayIdx], "yyyy-MM-dd");
+    const defaultName = `${DAY_LABELS[targetDayIdx]} ${format(daysRef.current[targetDayIdx], "d MMM", { locale: ru })}`;
+    const name = window.prompt("РќР°Р·РІР°РЅРёРµ С€Р°Р±Р»РѕРЅР° РґРЅСЏ", defaultName)?.trim();
+    if (!name) return;
+
+    const slots = TIME_SLOTS.map((_, slotIdx) => getEntryTagName(entryMapRef.current, dateStr, slotIdx));
+    setDayTemplates(saveDayTemplate(name, slots));
+    setSelectedDayTemplateId("none");
+    toast.success(`РЎРѕС…СЂР°РЅРµРЅ С€Р°Р±Р»РѕРЅ РґРЅСЏ В«${name}В»`);
+  }, []);
+
+  const applySelectedDayTemplate = useCallback(() => {
+    const template = dayTemplates.find((item) => item.id === selectedDayTemplateId);
+    const targetDayIdx = activeCellRef.current?.dayIdx ?? selectionRef.current?.startDay;
+    if (!template || targetDayIdx === undefined) {
+      toast.info("Р’С‹Р±РµСЂРёС‚Рµ С€Р°Р±Р»РѕРЅ РґРЅСЏ Рё Р°РєС‚РёРІРЅС‹Р№ РґРµРЅСЊ");
+      return;
+    }
+
+    const dateStr = format(daysRef.current[targetDayIdx], "yyyy-MM-dd");
+    const tagMap = new Map(tagList.map((tag) => [tag.name.toLowerCase(), tag]));
+    const entries = template.slots.map((tagName, slotIdx) => {
+      const tag = tagName ? tagMap.get(tagName.toLowerCase()) ?? null : null;
+      const slot = TIME_SLOTS[slotIdx];
+      return {
+        entryDate: dateStr,
+        startTime: slot.start,
+        endTime: slot.end,
+        tagId: tag?.id ?? null,
+        tagName: tag?.name ?? (tagName ?? null),
+      };
+    });
+
+    bulkMutation.mutate(entries);
+    toast.success(`РЁР°Р±Р»РѕРЅ РґРЅСЏ В«${template.name}В» РїСЂРёРјРµРЅС‘РЅ`);
+  }, [bulkMutation, dayTemplates, selectedDayTemplateId, tagList]);
+
+  const saveCurrentWeekTemplate = useCallback(() => {
+    const defaultName = `РќРµРґРµР»СЏ ${weekNum}`;
+    const name = window.prompt("РќР°Р·РІР°РЅРёРµ С€Р°Р±Р»РѕРЅР° РЅРµРґРµР»Рё", defaultName)?.trim();
+    if (!name) return;
+
+    const templateDays = daysRef.current.map((day) => {
+      const dateStr = format(day, "yyyy-MM-dd");
+      return TIME_SLOTS.map((_, slotIdx) => getEntryTagName(entryMapRef.current, dateStr, slotIdx));
+    });
+
+    setWeekTemplates(saveWeekTemplate(name, templateDays));
+    setSelectedWeekTemplateId("none");
+    toast.success(`РЎРѕС…СЂР°РЅРµРЅ С€Р°Р±Р»РѕРЅ РЅРµРґРµР»Рё В«${name}В»`);
+  }, [weekNum]);
+
+  const applySelectedWeekTemplate = useCallback(() => {
+    const template = weekTemplates.find((item) => item.id === selectedWeekTemplateId);
+    if (!template) {
+      toast.info("Р’С‹Р±РµСЂРёС‚Рµ С€Р°Р±Р»РѕРЅ РЅРµРґРµР»Рё");
+      return;
+    }
+
+    const tagMap = new Map(tagList.map((tag) => [tag.name.toLowerCase(), tag]));
+    const entries = template.days.flatMap((daySlots, dayIdx) => {
+      const dateStr = format(daysRef.current[dayIdx], "yyyy-MM-dd");
+      return daySlots.map((tagName, slotIdx) => {
+        const tag = tagName ? tagMap.get(tagName.toLowerCase()) ?? null : null;
+        const slot = TIME_SLOTS[slotIdx];
+        return {
+          entryDate: dateStr,
+          startTime: slot.start,
+          endTime: slot.end,
+          tagId: tag?.id ?? null,
+          tagName: tag?.name ?? (tagName ?? null),
+        };
+      });
+    });
+
+    bulkMutation.mutate(entries);
+    toast.success(`РЁР°Р±Р»РѕРЅ РЅРµРґРµР»Рё В«${template.name}В» РїСЂРёРјРµРЅС‘РЅ`);
+  }, [bulkMutation, selectedWeekTemplateId, tagList, weekTemplates]);
+
   // ── Keyboard shortcuts ──
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if typing in input
       const active = document.activeElement;
       if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA")) return;
+
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && /^[1-9]$/.test(e.key)) {
+        const hotkeyTag = hotkeyTags[Number(e.key) - 1];
+        if (hotkeyTag) {
+          applyTagToCurrentSelection(hotkeyTag);
+          e.preventDefault();
+          return;
+        }
+      }
 
       if (e.key === "Enter") {
         const cell = activeCellRef.current;
@@ -959,7 +1201,8 @@ export default function TrackingPage() {
           sel.start === cell.slotIdx;
 
         if (cell && singleSelectedCell) {
-          const nextSlotIdx = Math.min(cell.slotIdx + 1, TIME_SLOTS.length - 1);
+          const direction = e.shiftKey ? -1 : 1;
+          const nextSlotIdx = Math.min(Math.max(cell.slotIdx + direction, 0), TIME_SLOTS.length - 1);
 
           if (nextSlotIdx !== cell.slotIdx) {
             const nextCell = { dayIdx: cell.dayIdx, slotIdx: nextSlotIdx };
@@ -1109,6 +1352,85 @@ export default function TrackingPage() {
             </Button>
             <Button variant="outline" size="sm" className="h-7 text-xs" onClick={goToday}>
               Сегодня
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {hotkeyTags.map((tag, index) => (
+              <Badge
+                key={tag.id}
+                variant="outline"
+                className="h-7 px-2 gap-1 text-[10px] border-border bg-card/60 text-white"
+                style={{ borderColor: `${tag.color}66` }}
+              >
+                <span className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-black" style={{ backgroundColor: tag.color }}>
+                  {index + 1}
+                </span>
+                <span className="max-w-16 truncate">{tag.name}</span>
+              </Badge>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1">
+            <Button
+              variant={showGaps ? "default" : "outline"}
+              size="sm"
+              className="h-7 text-xs gap-1"
+              onClick={() => setShowGaps((value) => !value)}
+            >
+              <AlertTriangle className="w-3 h-3" />
+              Пустоты ({unfilledGaps.length})
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={jumpToNextGap}
+              disabled={unfilledGaps.length === 0}
+            >
+              След. пустота
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={saveCurrentDayTemplate}>
+              <Save className="w-3 h-3" />
+              День
+            </Button>
+            <Select value={selectedDayTemplateId} onValueChange={setSelectedDayTemplateId}>
+              <SelectTrigger className="h-7 w-36 text-xs bg-transparent border-border">
+                <SelectValue placeholder="Шаблон дня" />
+              </SelectTrigger>
+              <SelectContent className="max-h-72 overflow-y-auto">
+                <SelectItem value="none">Шаблон дня</SelectItem>
+                {dayTemplates.map((template) => (
+                  <SelectItem key={template.id} value={template.id}>{template.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={applySelectedDayTemplate} disabled={selectedDayTemplateId === "none"}>
+              Применить
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={saveCurrentWeekTemplate}>
+              <BookCopy className="w-3 h-3" />
+              Неделя
+            </Button>
+            <Select value={selectedWeekTemplateId} onValueChange={setSelectedWeekTemplateId}>
+              <SelectTrigger className="h-7 w-40 text-xs bg-transparent border-border">
+                <SelectValue placeholder="Шаблон недели" />
+              </SelectTrigger>
+              <SelectContent className="max-h-72 overflow-y-auto">
+                <SelectItem value="none">Шаблон недели</SelectItem>
+                {weekTemplates.map((template) => (
+                  <SelectItem key={template.id} value={template.id}>{template.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={applySelectedWeekTemplate} disabled={selectedWeekTemplateId === "none"}>
+              Применить
             </Button>
           </div>
 
@@ -1287,17 +1609,21 @@ export default function TrackingPage() {
                         fillDownState.dayIdx === di &&
                         si >= Math.min(fillDownState.startSlot, fillDownState.endSlot) &&
                         si <= Math.max(fillDownState.startSlot, fillDownState.endSlot);
+                      const isGap = gapKeySet.has(`${dateStr}_${slot.start}`);
 
                       return (
                         <ContextMenu key={di}>
                           <ContextMenuTrigger asChild>
                             <td
-                              className={`border-r border-border/20 relative cursor-pointer ${isWeekend ? "bg-muted/5" : ""} ${highlighted ? "bg-primary/25" : ""} ${selected && !highlighted ? "bg-primary/15 outline outline-1 outline-primary/40" : ""} ${isPaste && !highlighted ? "outline outline-1 outline-green-400/60" : ""} ${isFillPreview ? "outline outline-1 outline-cyan-400/60" : ""}`}
+                              data-grid-cell={`${dateStr}_${slot.start}`}
+                              className={`border-r border-border/20 relative cursor-pointer ${isWeekend ? "bg-muted/5" : ""} ${highlighted ? "bg-primary/25" : ""} ${selected && !highlighted ? "bg-primary/15 outline outline-1 outline-primary/40" : ""} ${isPaste && !highlighted ? "outline outline-1 outline-green-400/60" : ""} ${isFillPreview ? "outline outline-1 outline-cyan-400/60" : ""} ${showGaps && isGap && !tag ? "outline outline-1 outline-rose-400/55" : ""}`}
                               style={{
                                 backgroundColor: isActive && !highlighted
                                   ? "rgba(34,211,238,0.18)"
                                   : isFillPreview
                                     ? (tag ? tag.color + "40" : "rgba(34,211,238,0.15)")
+                                  : showGaps && isGap && !tag
+                                    ? "rgba(244,63,94,0.09)"
                                   : isPaste && !highlighted
                                     ? "rgba(74,222,128,0.15)"
                                     : (!highlighted && !selected && tag ? tag.color + "33" : undefined),
@@ -1511,6 +1837,28 @@ export default function TrackingPage() {
 
             {/* ── Tag stats (below work blocks) ── */}
             <div>
+            {tagGoalRows.length > 0 && (
+              <div className="mx-3 pt-2 border-t border-border/50 pb-3">
+                <div className="text-[10px] text-white uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                  <Target className="w-3 h-3 text-sky-400" />
+                  Цели по тегам
+                </div>
+                <div className="space-y-1.5">
+                  {tagGoalRows.slice(0, 6).map((goal) => (
+                    <div key={goal.id} className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: goal.color }} />
+                        <span className="flex-1 text-[10px] text-white truncate">{goal.name}</span>
+                        <span className="text-[10px] text-white/70">{goal.actualHours.toFixed(1)} / {goal.goalHours.toFixed(1)}ч</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-muted/30 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${goal.pct}%`, backgroundColor: goal.color }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="px-3 py-2 border-b border-border bg-background">
               <div className="text-xs font-semibold text-white uppercase tracking-wide">Теги недели</div>
             </div>

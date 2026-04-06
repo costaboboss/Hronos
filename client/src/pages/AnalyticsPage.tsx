@@ -39,6 +39,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { getEfficiencyColor, getEfficiencyTextClass } from "@/lib/efficiency";
 import { blocksToHours, blocksToPercent, useWorkNorm } from "@/lib/workNorm";
+import { getTagGoals } from "@/lib/planning";
 
 type TagItem = {
   id: number;
@@ -349,6 +350,72 @@ function TagBreakdown({
   );
 }
 
+function GoalBreakdown({
+  title,
+  stats,
+  tags,
+  dayCount,
+}: {
+  title: string;
+  stats: Array<{ name: string; color: string; blocks: number }>;
+  tags: TagItem[];
+  dayCount: number;
+}) {
+  const goals = getTagGoals();
+  const rows = tags
+    .map((tag) => {
+      const goalHours = goals[String(tag.id)];
+      if (!goalHours) return null;
+      const stat = stats.find((item) => item.name === tag.name);
+      const actualHours = stat ? blocksToHours(stat.blocks) : 0;
+      const targetHours = goalHours * dayCount;
+      const pct = targetHours > 0 ? Math.round((actualHours / targetHours) * 100) : 0;
+      return {
+        id: tag.id,
+        name: tag.name,
+        color: tag.color,
+        actualHours,
+        targetHours,
+        pct,
+      };
+    })
+    .filter((row): row is { id: number; name: string; color: string; actualHours: number; targetHours: number; pct: number } => !!row);
+
+  if (rows.length === 0) return null;
+
+  return (
+    <Card className="bg-card border-border">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          {rows.map((row) => (
+            <div key={row.id} className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: row.color }} />
+                <span className="flex-1 text-sm text-foreground truncate">{row.name}</span>
+                <span className={`text-xs font-medium ${getEfficiencyTextClass(Math.min(100, row.pct))}`}>
+                  {row.actualHours.toFixed(1)} / {row.targetHours.toFixed(1)}ч
+                </span>
+              </div>
+              <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${Math.min(100, row.pct)}%`,
+                    backgroundColor: row.color,
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function YearTagCharts({
   stats,
   chartType,
@@ -488,9 +555,15 @@ function WeeklyAnalytics({ tags }: { tags: TagItem[] }) {
   });
 
   const weekOpt = WEEK_OPTIONS.find((w) => w.value === weekNum) ?? WEEK_OPTIONS[0];
+  const previousWeekOpt =
+    WEEK_OPTIONS.find((week) => week.value === String(Math.max(Number(weekNum) - 1, 1))) ?? WEEK_OPTIONS[0];
   const { data: entries = [] } = trpc.entries.getByRange.useQuery({
     startDate: weekOpt.start,
     endDate: weekOpt.end,
+  });
+  const { data: previousEntries = [] } = trpc.entries.getByRange.useQuery({
+    startDate: previousWeekOpt.start,
+    endDate: previousWeekOpt.end,
   });
 
   const stats = useMemo(() => buildTagStats(entries, tags), [entries, tags]);
@@ -504,6 +577,21 @@ function WeeklyAnalytics({ tags }: { tags: TagItem[] }) {
       ),
     [entries, tags, weekOpt, workNormBlocks]
   );
+  const previousSeries = useMemo(
+    () =>
+      buildEfficiencySeries(
+        previousEntries,
+        tags,
+        eachDayOfInterval({ start: previousWeekOpt.startDate, end: previousWeekOpt.endDate }),
+        workNormBlocks
+      ),
+    [previousEntries, previousWeekOpt, tags, workNormBlocks]
+  );
+  const currentAvg = series.length ? Math.round(series.reduce((sum, item) => sum + item.pct, 0) / series.length) : 0;
+  const previousAvg = previousSeries.length
+    ? Math.round(previousSeries.reduce((sum, item) => sum + item.pct, 0) / previousSeries.length)
+    : 0;
+  const delta = currentAvg - previousAvg;
 
   return (
     <div className="space-y-4">
@@ -529,6 +617,26 @@ function WeeklyAnalytics({ tags }: { tags: TagItem[] }) {
       </div>
 
       <EfficiencyCards series={series} />
+
+      <Card className="bg-card border-border">
+        <CardContent className="pt-4">
+          <div className="flex flex-wrap items-center gap-6">
+            <div>
+              <div className="text-xs text-muted-foreground">Сравнение с прошлой неделей</div>
+              <div className={`text-2xl font-semibold ${delta >= 0 ? "text-green-400" : "text-red-400"}`}>
+                {delta >= 0 ? "+" : ""}{delta}%
+              </div>
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Было: <span className="text-foreground font-medium">{previousAvg}%</span> ·
+              Стало: <span className="text-foreground font-medium"> {currentAvg}%</span>
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Прошлая неделя: <span className="text-foreground">{previousWeekOpt.label}</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <EfficiencyChart
@@ -583,6 +691,8 @@ function WeeklyAnalytics({ tags }: { tags: TagItem[] }) {
           <TagBreakdown title="По тегам" stats={stats} />
         </div>
       )}
+
+      <GoalBreakdown title="Прогресс по целям за неделю" stats={stats} tags={tags} dayCount={7} />
     </div>
   );
 }
