@@ -132,6 +132,7 @@ export default function TrackingPage() {
   // Stable refs for keyboard handler
   const clipboardRef = useRef<ClipEntry[] | null>(null);
   const selectionRef = useRef<{ startDay: number; endDay: number; start: number; end: number } | null>(null);
+  const activeCellRef = useRef<{ dayIdx: number; slotIdx: number } | null>(null);
   const daysRef = useRef<Date[]>([]);
   const entryMapRef = useRef<EntryMap>({});
   const tagListRef = useRef<TagItem[]>([]);
@@ -150,6 +151,7 @@ export default function TrackingPage() {
   useEffect(() => { daysRef.current = days; }, [days]);
   useEffect(() => { clipboardRef.current = clipboard; }, [clipboard]);
   useEffect(() => { selectionRef.current = selection; }, [selection]);
+  useEffect(() => { activeCellRef.current = activeCell; }, [activeCell]);
   useEffect(() => { fillDownRef.current = fillDownState; }, [fillDownState]);
 
   const startDate = format(weekMonday, "yyyy-MM-dd");
@@ -896,6 +898,43 @@ export default function TrackingPage() {
       // Ignore if typing in input
       const active = document.activeElement;
       if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA")) return;
+
+      if (e.key === "Enter") {
+        const cell = activeCellRef.current;
+        const sel = selectionRef.current;
+        const singleSelectedCell =
+          !!sel &&
+          sel.startDay === sel.endDay &&
+          sel.start === sel.end &&
+          cell &&
+          sel.startDay === cell.dayIdx &&
+          sel.start === cell.slotIdx;
+
+        if (cell && singleSelectedCell) {
+          const nextSlotIdx = Math.min(cell.slotIdx + 1, TIME_SLOTS.length - 1);
+
+          if (nextSlotIdx !== cell.slotIdx) {
+            const nextCell = { dayIdx: cell.dayIdx, slotIdx: nextSlotIdx };
+            const nextSelection = {
+              startDay: nextCell.dayIdx,
+              endDay: nextCell.dayIdx,
+              start: nextCell.slotIdx,
+              end: nextCell.slotIdx,
+            };
+
+            setSelection(nextSelection);
+            selectionRef.current = nextSelection;
+            setActiveCell(nextCell);
+            setMenuCell(null);
+            setMultiMenuOpen(false);
+            setMultiMenuPos(null);
+            setPasteTarget(nextCell.dayIdx, nextCell.slotIdx);
+          }
+
+          e.preventDefault();
+          return;
+        }
+      }
 
       // Delete / Backspace: clear selected cells
       if (e.key === "Delete" || e.key === "Backspace") {
