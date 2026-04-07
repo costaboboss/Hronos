@@ -1770,7 +1770,7 @@ export default function TrackingPage() {
             onMouseUp={() => { if (dragState?.active) setDragState(null); }}
           >
           <table className="w-full border-collapse table-fixed" style={{ minWidth: 700 }}>
-            <thead className="sticky z-20 bg-background" style={{ top: headerFrame?.height ?? 0 }}>
+            <thead className="sticky z-20 bg-background" style={{ top: 0 }}>
               <tr>
                 <th className="border-b border-r border-border bg-background" style={{ width: 52 }} />
                 {days.map((day, di) => {
