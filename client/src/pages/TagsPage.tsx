@@ -291,7 +291,7 @@ function TagRow({
           placeholder="0"
           className="h-7 w-16 text-xs bg-input"
         />
-        <span className="text-[10px] text-muted-foreground">С‡</span>
+        <span className="text-[10px] text-muted-foreground">Ñ</span>
       </div>
 
       {/* Actions */}
