@@ -8,6 +8,8 @@ import TrackingPage from "./pages/TrackingPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import TagsPage from "./pages/TagsPage";
 import LoginPage from "./pages/LoginPage";
+import TardisDocumentPage from "./pages/TardisDocumentPage";
+import TardisPage from "./pages/TardisPage";
 import DashboardLayout from "./components/DashboardLayout";
 import { useAuth } from "./_core/hooks/useAuth";
 
@@ -33,6 +35,8 @@ function AuthenticatedApp() {
         <Route path="/tracking" component={TrackingPage} />
         <Route path="/analytics" component={AnalyticsPage} />
         <Route path="/tags" component={TagsPage} />
+        <Route path="/tardis" component={TardisPage} />
+        <Route path="/tardis/doc/:id" component={TardisDocumentPage} />
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
       </Switch>

@@ -1,4 +1,5 @@
 import { COOKIE_NAME } from "@shared/const";
+import { tardisRouter } from "./tardis/router";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
@@ -7,6 +8,7 @@ import * as db from "./db";
 
 export const appRouter = router({
   system: systemRouter,
+  tardis: tardisRouter,
 
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),

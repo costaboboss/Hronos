@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Clock, BarChart2, Tag, LogOut, PanelLeft } from "lucide-react";
+import { Clock, BarChart2, Tag, LogOut, PanelLeft, NotebookPen } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
@@ -31,6 +31,7 @@ const menuItems = [
   { icon: Clock, label: "Учёт времени", path: "/" },
   { icon: BarChart2, label: "Аналитика", path: "/analytics" },
   { icon: Tag, label: "Категории тегов", path: "/tags" },
+  { icon: NotebookPen, label: "Tardis", path: "/tardis" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
