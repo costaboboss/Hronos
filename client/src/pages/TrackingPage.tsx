@@ -1296,7 +1296,6 @@ export default function TrackingPage() {
     setDayTemplates(saveDayTemplate(name, slots));
     setSelectedDayTemplateId("none");
     toast.success(`Ð¡Ð¾ÑÑÐ°Ð½ÑÐ½ ÑÐ°Ð±Ð»Ð¾Ð½ Ð´Ð½Ñ Â«${name}Â»`);
-
   }, []);
 
   const applySelectedDayTemplate = useCallback(() => {
@@ -1340,7 +1339,6 @@ export default function TrackingPage() {
     setWeekTemplates(saveWeekTemplate(name, templateDays));
     setSelectedWeekTemplateId("none");
     toast.success(`Ð¡Ð¾ÑÑÐ°Ð½ÑÐ½ ÑÐ°Ð±Ð»Ð¾Ð½ Ð½ÐµÐ´ÐµÐ»Ð¸ Â«${name}Â»`);
-
   }, [weekNum]);
 
   const applySelectedWeekTemplate = useCallback(() => {
@@ -1923,10 +1921,10 @@ export default function TrackingPage() {
                               className={entry?.tagId ? "text-destructive focus:text-destructive" : ""}
                               onClick={() => { if (entry?.tagId) clearSelectedCells([{ entryDate: dateStr, startTime: TIME_SLOTS[si].start }], { undoLabel: "Очистка ячейки" }); }}
                             >
-                              <Trash2 className="w-3.5 h-3.5 mr-2" />
+                              onClick={() => { if (entry?.tagId) clearSelectedCells([{ entryDate: dateStr, startTime: TIME_SLOTS[si].start }], { undoLabel: "ÐÑÐ¸ÑÑÐºÐ° ÑÑÐµÐ¹ÐºÐ¸" }); }}
                               Очистить ячейку
                             </ContextMenuItem>
-                          </ContextMenuContent>
+                              ÐÑÐ¸ÑÑÐ¸ÑÑ ÑÑÐµÐ¹ÐºÑ
                         </ContextMenu>
                       );
                     })}
@@ -2139,12 +2137,13 @@ export default function TrackingPage() {
                   <span className="flex-1 text-left truncate">Продолжить: {cellTag.name}</span>
                   <span className="text-[10px] opacity-60">→</span>
                 </button>
-              );
-            })()}
+                  <span className="flex-1 text-left truncate">ÐÑÐ¾Ð´Ð¾Ð»Ð¶Ð¸ÑÑ: {cellTag.name}</span>
+                  <span className="text-[10px] opacity-60">â</span>
             <div className="text-[10px] text-muted-foreground font-medium px-2 pb-1.5 border-b border-border mb-1">
               {menuCell ? "Сменить тег" : selection ? `Выбрано ${(selection.end - selection.start + 1) * (selection.endDay - selection.startDay + 1)} блоков` : "Выбор тега"}
             </div>
             <div className="space-y-0.5 max-h-64 overflow-y-auto">
+              {menuCell ? "Ð¡Ð¼ÐµÐ½Ð¸ÑÑ ÑÐµÐ³" : selection ? `ÐÑÐ±ÑÐ°Ð½Ð¾ ${(selection.end - selection.start + 1) * (selection.endDay - selection.startDay + 1)} Ð±Ð»Ð¾ÐºÐ¾Ð²` : "ÐÑÐ±Ð¾Ñ ÑÐµÐ³Ð°"}
               {top7TagIds.size > 0 && (() => {
                 const top7 = tagList.filter(t => top7TagIds.has(t.id));
                 const rest = tagList.filter(t => !top7TagIds.has(t.id));
@@ -2220,7 +2219,6 @@ export default function TrackingPage() {
         </>
       )}
 
-
       {/* Excel Import Dialog */}
       <Dialog open={importDialogOpen} onOpenChange={(open) => { setImportDialogOpen(open); if (!open) setActiveCell(null); }}>
         <DialogContent className="sm:max-w-lg">
@@ -2229,11 +2227,8 @@ export default function TrackingPage() {
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Ð¡ÐºÐ¾Ð¿Ð¸ÑÑÐ¹ÑÐµ Ð´Ð°Ð½Ð½ÑÐµ Ð¸Ð· Excel Ð¸ Ð²ÑÑÐ°Ð²ÑÑÐµ Ð¸Ñ Ð½Ð¸Ð¶Ðµ. ÐÐ¾Ð´Ð´ÐµÑÐ¶Ð¸Ð²Ð°ÐµÑÑÑ ÑÐ¾ÑÐ¼Ð°Ñ
-              <code className="mx-1 text-xs bg-muted px-1 rounded">Ð²ÑÐµÐ¼Ñ[Tab]ÑÐµÐ³</code>
-              Ð¸Ð»Ð¸ Ð¿ÑÐ¾ÑÑÐ¾
-              <code className="mx-1 text-xs bg-muted px-1 rounded">ÑÐµÐ³</code>
-              Ð½Ð° ÐºÐ°Ð¶Ð´Ð¾Ð¹ ÑÑÑÐ¾ÐºÐµ.
+              Ð¡ÐºÐ¾Ð¿Ð¸ÑÑÐ¹ÑÐµ Ð´Ð°Ð½Ð½ÑÐµ Ð¸Ð· Excel (Ctrl+C) Ð¸ Ð²ÑÑÐ°Ð²ÑÑÐµ Ð¸Ñ Ð½Ð¸Ð¶Ðµ (Ctrl+V Ð² Ð¿Ð¾Ð»Ðµ Ð²Ð²Ð¾Ð´Ð°).
+              ÐÐ¾Ð´Ð´ÐµÑÐ¶Ð¸Ð²Ð°ÐµÑÑÑ ÑÐ¾ÑÐ¼Ð°Ñ: <code className="text-xs bg-muted px-1 rounded">Ð²ÑÐµÐ¼Ñ[Tab]ÑÐµÐ³</code> Ð¸Ð»Ð¸ Ð¿ÑÐ¾ÑÑÐ¾ <code className="text-xs bg-muted px-1 rounded">ÑÐµÐ³</code> Ð½Ð° ÐºÐ°Ð¶Ð´Ð¾Ð¹ ÑÑÑÐ¾ÐºÐµ.
             </p>
             <textarea
               className="w-full h-48 p-2 text-sm font-mono bg-input border border-border rounded resize-none focus:outline-none focus:ring-1 focus:ring-primary text-foreground"
@@ -2242,7 +2237,7 @@ export default function TrackingPage() {
 7:00	ÑÐ°Ð±Ð¾ÑÐ°
 ..."}
               value={importText}
-              onChange={(e) => setImportText(e.target.value)}
+              onChange={e => setImportText(e.target.value)}
               autoFocus
             />
             <p className="text-xs text-muted-foreground">
@@ -2250,14 +2245,10 @@ export default function TrackingPage() {
             </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setImportDialogOpen(false); setActiveCell(null); }}>
-              ÐÑÐ¼ÐµÐ½Ð°
-            </Button>
+            <Button variant="outline" onClick={() => { setImportDialogOpen(false); setActiveCell(null); }}>ÐÑÐ¼ÐµÐ½Ð°</Button>
             <Button onClick={handleImportConfirm} disabled={!importText.trim()}>
-              {importText.trim()
-                ? `ÐÑÑÐ°Ð²Ð¸ÑÑ (${importText.trim().split(/?
-/).filter((l) => l.trim()).length} ÑÑÑÐ¾Ðº)`
-                : "ÐÑÑÐ°Ð²Ð¸ÑÑ"}
+              ÐÑÑÐ°Ð²Ð¸ÑÑ {importText.trim() ? `(${importText.trim().split(/?
+/).filter(l => l.trim()).length} ÑÑÑÐ¾Ðº)` : ""}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2270,9 +2261,8 @@ export default function TrackingPage() {
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              ÐÑÑÐ°Ð²ÑÑÐµ ÑÑÐ´Ð° Ð²ÑÑ Ð½ÐµÐ´ÐµÐ»Ñ ÑÐµÐ»Ð¸ÐºÐ¾Ð¼:
-              <code className="mx-1 text-xs bg-muted px-1 rounded">672 ÑÑÑÐ¾ÐºÐ¸ Ð¿Ð¾Ð´ÑÑÐ´</code>.
-              ÐÐµÑÐ²ÑÐµ 96 ÑÑÑÐ¾Ðº Ð¿Ð¾Ð¹Ð´ÑÑ Ð² Ð¿Ð¾Ð½ÐµÐ´ÐµÐ»ÑÐ½Ð¸Ðº, ÑÐ»ÐµÐ´ÑÑÑÐ¸Ðµ 96 â Ð²Ð¾ Ð²ÑÐ¾ÑÐ½Ð¸Ðº, Ð´Ð°Ð»ÑÑÐµ Ð¿Ð¾ Ð´Ð½ÑÐ¼ Ð´Ð¾ Ð²Ð¾ÑÐºÑÐµÑÐµÐ½ÑÑ.
+              ÐÑÑÐ°Ð²ÑÑÐµ ÑÑÐ´Ð° Ð²ÑÑ Ð½ÐµÐ´ÐµÐ»Ñ ÑÐµÐ»Ð¸ÐºÐ¾Ð¼: <code className="text-xs bg-muted px-1 rounded">672 ÑÑÑÐ¾ÐºÐ¸ Ð¿Ð¾Ð´ÑÑÐ´</code>.
+              ÐÐµÑÐ²ÑÐµ 96 ÑÑÑÐ¾Ðº â Ð¿Ð¾Ð½ÐµÐ´ÐµÐ»ÑÐ½Ð¸Ðº, ÑÐ»ÐµÐ´ÑÑÑÐ¸Ðµ 96 â Ð²ÑÐ¾ÑÐ½Ð¸Ðº, Ð¿Ð¾ÑÐ¾Ð¼ ÑÑÐµÐ´Ð° Ð¸ ÑÐ°Ðº Ð´Ð¾ Ð²Ð¾ÑÐºÑÐµÑÐµÐ½ÑÑ.
               ÐÑÐ»Ð¸ Ð¸Ð· Excel Ð¿ÑÐ¸Ð»ÐµÑÐ¸Ñ ÐµÑÑ Ð¿ÐµÑÐ²ÑÐ¹ ÑÑÐ¾Ð»Ð±ÐµÑ ÑÐ¾ Ð²ÑÐµÐ¼ÐµÐ½ÐµÐ¼, Ð¾Ð½ ÑÐ¾Ð¶Ðµ Ð¿Ð¾Ð´Ð´ÐµÑÐ¶Ð¸Ð²Ð°ÐµÑÑÑ.
             </p>
             <textarea
@@ -2289,7 +2279,7 @@ export default function TrackingPage() {
 [96 ÑÑÑÐ¾Ðº Ð²ÑÐ¾ÑÐ½Ð¸ÐºÐ°]
 ..."}
               value={weekImportText}
-              onChange={(e) => setWeekImportText(e.target.value)}
+              onChange={e => setWeekImportText(e.target.value)}
               autoFocus
             />
             <p className="text-xs text-muted-foreground">
@@ -2309,3 +2299,8 @@ export default function TrackingPage() {
     </div>
   );
 }
+
+
+
+
+
