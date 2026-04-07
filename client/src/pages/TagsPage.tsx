@@ -278,7 +278,7 @@ function TagRow({
       )}
 
       <div className="flex items-center gap-1.5 flex-shrink-0">
-        <span className="text-[10px] text-muted-foreground">Цель</span>
+        <span className="text-[10px] text-muted-foreground">Р¦РµР»СЊ</span>
         <Input
           type="number"
           min={0}
