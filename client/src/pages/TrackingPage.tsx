@@ -45,7 +45,7 @@ import {
 // в”Ђв”Ђв”Ђ Constants в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 const YEAR = 2026;
-const DAY_LABELS = ["РџРЅ", "Р’С‚", "РЎСЂ", "Р§С‚", "РџС‚", "РЎР±", "Р’СЃ"];
+const DAY_LABELS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const COLORS = ["#6366f1","#f59e0b","#10b981","#ef4444","#f97316","#8b5cf6","#06b6d4","#84cc16","#ec4899","#3b82f6","#14b8a6","#f43f5e"];
 
 function getTimeSlots(): { start: string; end: string; label: string }[] {
@@ -436,7 +436,7 @@ export default function TrackingPage() {
       if (ctx?.snapshot) {
         restoreRangesSnapshot(ctx.snapshot);
       }
-      toast.error("РћС€РёР±РєР° СЃРѕС…СЂР°РЅРµРЅРёСЏ");
+      toast.error("Ошибка сохранения");
     },
     onSettled: () => {
       invalidateReactiveRanges();
@@ -463,7 +463,7 @@ export default function TrackingPage() {
       if (ctx?.snapshot) {
         restoreRangesSnapshot(ctx.snapshot);
       }
-      toast.error("РћС€РёР±РєР° СЃРѕС…СЂР°РЅРµРЅРёСЏ");
+      toast.error("Ошибка сохранения");
     },
     onSettled: () => {
       invalidateReactiveRanges();
@@ -484,7 +484,7 @@ export default function TrackingPage() {
       if (ctx?.snapshot) {
         restoreRangesSnapshot(ctx.snapshot);
       }
-      toast.error("РћС€РёР±РєР° СѓРґР°Р»РµРЅРёСЏ");
+      toast.error("Ошибка удаления");
     },
     onSettled: () => {
       invalidateReactiveRanges();
@@ -559,7 +559,7 @@ export default function TrackingPage() {
       tagId: tag?.id ?? null,
       tagName: tag?.name ?? null,
     }], {
-      undoLabel: tag ? `РўРµРі ${tag.name}` : "РћС‡РёСЃС‚РєР° СЏС‡РµР№РєРё",
+      undoLabel: tag ? `Тег ${tag.name}` : "Очистка ячейки",
     });
   }, [applyEntriesChange]);
 
@@ -570,14 +570,14 @@ export default function TrackingPage() {
       entries.push({ entryDate: dateStr, startTime: slot.start, endTime: slot.end, tagId: tag?.id ?? null, tagName: tag?.name ?? null });
     }
     applyEntriesChange(entries, {
-      undoLabel: tag ? `Заполнение ${tag.name}` : "Массовая очистка",
-      successMessage: `Р—Р°РїРѕР»РЅРµРЅРѕ ${entries.length} Р±Р»РѕРєРѕРІ`,
+      undoLabel: tag ? `ÐÐ°Ð¿Ð¾Ð»Ð½ÐµÐ½Ð¸Ðµ ${tag.name}` : "ÐÐ°ÑÑÐ¾Ð²Ð°Ñ Ð¾ÑÐ¸ÑÑÐºÐ°",
+      successMessage: `ÐÐ°Ð¿Ð¾Ð»Ð½ÐµÐ½Ð¾ ${entries.length} Ð±Ð»Ð¾ÐºÐ¾Ð²`,
     });
   }, [applyEntriesChange]);
 
   const handleAddTag = useCallback((name: string) => {
     createTagMutation.mutate({ name, color: COLORS[Math.floor(Math.random() * COLORS.length)] });
-    toast.success(`РўРµРі В«${name}В» СЃРѕР·РґР°РЅ`);
+    toast.success(`Ð¢ÐµÐ³ Â«${name}Â» ÑÐ¾Ð·Ð´Ð°Ð½`);
   }, [createTagMutation]);
 
   const applyTagToCurrentSelection = useCallback((tag: TagItem | null) => {
@@ -600,8 +600,8 @@ export default function TrackingPage() {
         }
       }
       applyEntriesChange(entries, {
-        undoLabel: tag ? `Выделение: ${tag.name}` : "Очистка выделения",
-        successMessage: tag ? `Р’В«${tag.name}Р’В» РІвЂ вЂ™ ${entries.length} Р В±Р В»Р С•Р С”Р С•Р Р†` : `Р С›РЎвЂЎР С‘РЎвЂ°Р ВµР Р…Р С• ${entries.length} Р В±Р В»Р С•Р С”Р С•Р Р†`,
+        undoLabel: tag ? `ÐÑÐ´ÐµÐ»ÐµÐ½Ð¸Ðµ: ${tag.name}` : "ÐÑÐ¸ÑÑÐºÐ° Ð²ÑÐ´ÐµÐ»ÐµÐ½Ð¸Ñ",
+        successMessage: tag ? `Â«${tag.name}Â» â ${entries.length} Ð±Ð»Ð¾ÐºÐ¾Ð²` : `ÐÑÐ¸ÑÐµÐ½Ð¾ ${entries.length} Ð±Ð»Ð¾ÐºÐ¾Ð²`,
       });
       return;
     }
@@ -624,7 +624,7 @@ export default function TrackingPage() {
     }
     setClipboard(copied);
     clipboardRef.current = copied;
-    toast.success(`РЎРєРѕРїРёСЂРѕРІР°РЅРѕ ${copied.length} Р±Р»РѕРєРѕРІ`);
+    toast.success(`Скопировано ${copied.length} блоков`);
   }, []);
 
   const handleCopyWeek = useCallback(async () => {
@@ -641,9 +641,9 @@ export default function TrackingPage() {
 
     try {
       await navigator.clipboard.writeText(text);
-      toast.success("РЎРєРѕРїРёСЂРѕРІР°РЅР° РІСЃСЏ РЅРµРґРµР»СЏ: 672 СЏС‡РµР№РєРё");
+      toast.success("Скопирована вся неделя: 672 ячейки");
     } catch {
-      toast.error("РќРµ СѓРґР°Р»РѕСЃСЊ СЃРєРѕРїРёСЂРѕРІР°С‚СЊ РЅРµРґРµР»СЋ РІ Р±СѓС„РµСЂ");
+      toast.error("Не удалось скопировать неделю в буфер");
     }
   }, []);
 
@@ -704,13 +704,13 @@ export default function TrackingPage() {
       });
 
       applyEntriesChange(entries, {
-        undoLabel: "Импорт недели",
+        undoLabel: "ÐÐ¼Ð¿Ð¾ÑÑ Ð½ÐµÐ´ÐµÐ»Ð¸",
       });
       const newCount = unknownNamesSet.size;
       toast.success(
         newCount > 0
-          ? `РРјРїРѕСЂС‚РёСЂРѕРІР°РЅР° РІСЃСЏ РЅРµРґРµР»СЏ: ${entries.length} СЏС‡РµРµРє. РЎРѕР·РґР°РЅРѕ С‚РµРіРѕРІ: ${newCount}`
-          : `РРјРїРѕСЂС‚РёСЂРѕРІР°РЅР° РІСЃСЏ РЅРµРґРµР»СЏ: ${entries.length} СЏС‡РµРµРє`
+          ? `ÐÐ¼Ð¿Ð¾ÑÑÐ¸ÑÐ¾Ð²Ð°Ð½Ð° Ð²ÑÑ Ð½ÐµÐ´ÐµÐ»Ñ: ${entries.length} ÑÑÐµÐµÐº. Ð¡Ð¾Ð·Ð´Ð°Ð½Ð¾ ÑÐµÐ³Ð¾Ð²: ${newCount}`
+          : `ÐÐ¼Ð¿Ð¾ÑÑÐ¸ÑÐ¾Ð²Ð°Ð½Ð° Ð²ÑÑ Ð½ÐµÐ´ÐµÐ»Ñ: ${entries.length} ÑÑÐµÐµÐº`
       );
       setWeekImportDialogOpen(false);
       setWeekImportText("");
@@ -776,12 +776,12 @@ export default function TrackingPage() {
         };
       });
       applyEntriesChange(entries, {
-        undoLabel: "Вставка из Excel",
+        undoLabel: "ÐÑÑÐ°Ð²ÐºÐ° Ð¸Ð· Excel",
       });
       const newCount = unknownNamesSet.size;
       toast.success(newCount > 0
-        ? `Р’СЃС‚Р°РІР»РµРЅРѕ ${entries.length} Р±Р»РѕРєРѕРІ. РЎРѕР·РґР°РЅРѕ С‚РµРіРѕРІ: ${newCount}`
-        : `Р’СЃС‚Р°РІР»РµРЅРѕ ${entries.length} Р±Р»РѕРєРѕРІ`);
+        ? `ÐÑÑÐ°Ð²Ð»ÐµÐ½Ð¾ ${entries.length} Ð±Ð»Ð¾ÐºÐ¾Ð². Ð¡Ð¾Ð·Ð´Ð°Ð½Ð¾ ÑÐµÐ³Ð¾Ð²: ${newCount}`
+        : `ÐÑÑÐ°Ð²Ð»ÐµÐ½Ð¾ ${entries.length} Ð±Ð»Ð¾ÐºÐ¾Ð²`);
       pasteTargetRef.current = null;
       setPasteTargetDisplay(null);
     };
@@ -816,8 +816,8 @@ export default function TrackingPage() {
         return { entryDate: dateStr, startTime: slot.start, endTime: slot.end, tagId: c.tag?.id ?? null, tagName: c.tag?.name ?? null };
       });
     applyEntriesChange(entries, {
-      undoLabel: "Вставка буфера",
-      successMessage: `Р’СЃС‚Р°РІР»РµРЅРѕ ${entries.length} Р±Р»РѕРєРѕРІ`,
+      undoLabel: "ÐÑÑÐ°Ð²ÐºÐ° Ð±ÑÑÐµÑÐ°",
+      successMessage: `ÐÑÑÐ°Ð²Ð»ÐµÐ½Ð¾ ${entries.length} Ð±Ð»Ð¾ÐºÐ¾Ð²`,
     });
     pasteTargetRef.current = null;
     setPasteTargetDisplay(null);
@@ -857,7 +857,7 @@ export default function TrackingPage() {
     for (let w = 1; w <= 53; w++) {
       const mon = getMondayOfWeek(YEAR, w);
       const sun = addDays(mon, 6);
-      list.push({ weekNum: w, label: `РќРµРґ. ${w} В· ${format(mon, "d MMM", { locale: ru })} вЂ“ ${format(sun, "d MMM", { locale: ru })}` });
+      list.push({ weekNum: w, label: `Нед. ${w} · ${format(mon, "d MMM", { locale: ru })} – ${format(sun, "d MMM", { locale: ru })}` });
     }
     return list;
   }, []);
@@ -980,8 +980,8 @@ export default function TrackingPage() {
       }
     }
     applyEntriesChange(entries, {
-      undoLabel: tag ? `Выделение: ${tag.name}` : "Очистка выделения",
-      successMessage: tag ? `«${tag.name}» → ${entries.length} блоков` : `Очищено ${entries.length} блоков`,
+      undoLabel: tag ? `ÐÑÐ´ÐµÐ»ÐµÐ½Ð¸Ðµ: ${tag.name}` : "ÐÑÐ¸ÑÑÐºÐ° Ð²ÑÐ´ÐµÐ»ÐµÐ½Ð¸Ñ",
+      successMessage: tag ? `Â«${tag.name}Â» â ${entries.length} Ð±Ð»Ð¾ÐºÐ¾Ð²` : `ÐÑÐ¸ÑÐµÐ½Ð¾ ${entries.length} Ð±Ð»Ð¾ÐºÐ¾Ð²`,
       clearSelection: true,
     });
     setMultiMenuOpen(false);
@@ -1014,7 +1014,7 @@ export default function TrackingPage() {
       if (!map[key]?.tagId) break;
       nextIdx++;
     }
-    if (nextIdx >= TIME_SLOTS.length) { toast.info("РќРµС‚ РїСѓСЃС‚С‹С… Р±Р»РѕРєРѕРІ РЅРёР¶Рµ"); return; }
+    if (nextIdx >= TIME_SLOTS.length) { toast.info("Нет пустых блоков ниже"); return; }
     const slot = TIME_SLOTS[nextIdx];
     applyEntriesChange([{
       entryDate: cell.dateStr,
@@ -1179,7 +1179,7 @@ export default function TrackingPage() {
   const workPct = blocksToPercent(workBlocksToday.total, workNormBlocks);
 
   // Efficiency per day for last 7 days
-  const DAY_NAMES_SHORT = ["Р’СЃ", "РџРЅ", "Р’С‚", "РЎСЂ", "Р§С‚", "РџС‚", "РЎР±"];
+  const DAY_NAMES_SHORT = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
   const efficiencyLast7 = useMemo(() => {
     const workTagIds = new Set((tagList as TagItem[]).filter(t => t.isWork).map(t => t.id));
     const workTagNames = new Set((tagList as TagItem[]).filter(t => t.isWork).map(t => t.name.toLowerCase()));
@@ -1190,7 +1190,7 @@ export default function TrackingPage() {
       if (!isWork) continue;
       dayCounts[e.entryDate] = (dayCounts[e.entryDate] ?? 0) + 1;
     }
-    // Build array of last 7 days (oldest в†’ newest)
+    // Build array of last 7 days (oldest -> newest)
     const days7: { dateStr: string; label: string; pct: number }[] = [];
     for (let i = 6; i >= 0; i--) {
       const d = subDays(new Date(), i);
@@ -1209,7 +1209,7 @@ export default function TrackingPage() {
     ? Math.round(efficiencyLast7.reduce((s, d) => s + d.pct, 0) / efficiencyLast7.length)
     : 0;
 
-  // Average efficiency: current week (MonвЂ“today) вЂ” uses dedicated thisWeekEntries query
+  // Average efficiency: current week (Mon-today) uses dedicated thisWeekEntries query
   const efficiencyThisWeek = useMemo(() => {
     const workTagIds = new Set((tagList as TagItem[]).filter(t => t.isWork).map(t => t.id));
     const workTagNames = new Set((tagList as TagItem[]).filter(t => t.isWork).map(t => t.name.toLowerCase()));
@@ -1275,7 +1275,7 @@ export default function TrackingPage() {
 
   const jumpToNextGap = useCallback(() => {
     if (unfilledGaps.length === 0) {
-      toast.success("Р СџРЎС“РЎРѓРЎвЂљР С•РЎвЂљ Р Р…Р ВµРЎвЂљ");
+      toast.success("Пустот нет");
       return;
     }
 
@@ -1289,20 +1289,20 @@ export default function TrackingPage() {
     const targetDayIdx = activeCellRef.current?.dayIdx ?? selectionRef.current?.startDay ?? 0;
     const dateStr = format(daysRef.current[targetDayIdx], "yyyy-MM-dd");
     const defaultName = `${DAY_LABELS[targetDayIdx]} ${format(daysRef.current[targetDayIdx], "d MMM", { locale: ru })}`;
-    const name = window.prompt("Р СњР В°Р В·Р Р†Р В°Р Р…Р С‘Р Вµ РЎв‚¬Р В°Р В±Р В»Р С•Р Р…Р В° Р Т‘Р Р…РЎРЏ", defaultName)?.trim();
+    const name = window.prompt("ÐÐ°Ð·Ð²Ð°Ð½Ð¸Ðµ ÑÐ°Ð±Ð»Ð¾Ð½Ð° Ð´Ð½Ñ", defaultName)?.trim();
     if (!name) return;
 
     const slots = TIME_SLOTS.map((_, slotIdx) => getEntryTagName(entryMapRef.current, dateStr, slotIdx));
     setDayTemplates(saveDayTemplate(name, slots));
     setSelectedDayTemplateId("none");
-    toast.success(`Р РЋР С•РЎвЂ¦РЎР‚Р В°Р Р…Р ВµР Р… РЎв‚¬Р В°Р В±Р В»Р С•Р Р… Р Т‘Р Р…РЎРЏ Р’В«${name}Р’В»`);
+    toast.success(`Ð¡Ð¾ÑÑÐ°Ð½ÑÐ½ ÑÐ°Ð±Ð»Ð¾Ð½ Ð´Ð½Ñ Â«${name}Â»`);
   }, []);
 
   const applySelectedDayTemplate = useCallback(() => {
     const template = dayTemplates.find((item) => item.id === selectedDayTemplateId);
     const targetDayIdx = activeCellRef.current?.dayIdx ?? selectionRef.current?.startDay;
     if (!template || targetDayIdx === undefined) {
-      toast.info("Р вЂ™РЎвЂ№Р В±Р ВµРЎР‚Р С‘РЎвЂљР Вµ РЎв‚¬Р В°Р В±Р В»Р С•Р Р… Р Т‘Р Р…РЎРЏ Р С‘ Р В°Р С”РЎвЂљР С‘Р Р†Р Р…РЎвЂ№Р в„– Р Т‘Р ВµР Р…РЎРЉ");
+      toast.info("ÐÑÐ±ÐµÑÐ¸ÑÐµ ÑÐ°Ð±Ð»Ð¾Ð½ Ð´Ð½Ñ Ð¸ Ð°ÐºÑÐ¸Ð²Ð½ÑÐ¹ Ð´ÐµÐ½Ñ");
       return;
     }
 
@@ -1321,14 +1321,14 @@ export default function TrackingPage() {
     });
 
     applyEntriesChange(entries, {
-      undoLabel: "Шаблон дня",
-      successMessage: `Р РЃР В°Р В±Р В»Р С•Р Р… Р Т‘Р Р…РЎРЏ Р’В«${template.name}Р’В» Р С—РЎР‚Р С‘Р СР ВµР Р…РЎвЂР Р…`,
+      undoLabel: "Ð¨Ð°Ð±Ð»Ð¾Ð½ Ð´Ð½Ñ",
+      successMessage: `Ð¨Ð°Ð±Ð»Ð¾Ð½ Ð´Ð½Ñ Â«${template.name}Â» Ð¿ÑÐ¸Ð¼ÐµÐ½ÑÐ½`,
     });
   }, [applyEntriesChange, dayTemplates, selectedDayTemplateId, tagList]);
 
   const saveCurrentWeekTemplate = useCallback(() => {
-    const defaultName = `Р СњР ВµР Т‘Р ВµР В»РЎРЏ ${weekNum}`;
-    const name = window.prompt("Р СњР В°Р В·Р Р†Р В°Р Р…Р С‘Р Вµ РЎв‚¬Р В°Р В±Р В»Р С•Р Р…Р В° Р Р…Р ВµР Т‘Р ВµР В»Р С‘", defaultName)?.trim();
+    const defaultName = `ÐÐµÐ´ÐµÐ»Ñ ${weekNum}`;
+    const name = window.prompt("ÐÐ°Ð·Ð²Ð°Ð½Ð¸Ðµ ÑÐ°Ð±Ð»Ð¾Ð½Ð° Ð½ÐµÐ´ÐµÐ»Ð¸", defaultName)?.trim();
     if (!name) return;
 
     const templateDays = daysRef.current.map((day) => {
@@ -1338,13 +1338,13 @@ export default function TrackingPage() {
 
     setWeekTemplates(saveWeekTemplate(name, templateDays));
     setSelectedWeekTemplateId("none");
-    toast.success(`Р РЋР С•РЎвЂ¦РЎР‚Р В°Р Р…Р ВµР Р… РЎв‚¬Р В°Р В±Р В»Р С•Р Р… Р Р…Р ВµР Т‘Р ВµР В»Р С‘ Р’В«${name}Р’В»`);
+    toast.success(`Ð¡Ð¾ÑÑÐ°Ð½ÑÐ½ ÑÐ°Ð±Ð»Ð¾Ð½ Ð½ÐµÐ´ÐµÐ»Ð¸ Â«${name}Â»`);
   }, [weekNum]);
 
   const applySelectedWeekTemplate = useCallback(() => {
     const template = weekTemplates.find((item) => item.id === selectedWeekTemplateId);
     if (!template) {
-      toast.info("Р вЂ™РЎвЂ№Р В±Р ВµРЎР‚Р С‘РЎвЂљР Вµ РЎв‚¬Р В°Р В±Р В»Р С•Р Р… Р Р…Р ВµР Т‘Р ВµР В»Р С‘");
+      toast.info("ÐÑÐ±ÐµÑÐ¸ÑÐµ ÑÐ°Ð±Ð»Ð¾Ð½ Ð½ÐµÐ´ÐµÐ»Ð¸");
       return;
     }
 
@@ -1365,8 +1365,8 @@ export default function TrackingPage() {
     });
 
     applyEntriesChange(entries, {
-      undoLabel: "Шаблон недели",
-      successMessage: `Р РЃР В°Р В±Р В»Р С•Р Р… Р Р…Р ВµР Т‘Р ВµР В»Р С‘ Р’В«${template.name}Р’В» Р С—РЎР‚Р С‘Р СР ВµР Р…РЎвЂР Р…`,
+      undoLabel: "Ð¨Ð°Ð±Ð»Ð¾Ð½ Ð½ÐµÐ´ÐµÐ»Ð¸",
+      successMessage: `Ð¨Ð°Ð±Ð»Ð¾Ð½ Ð½ÐµÐ´ÐµÐ»Ð¸ Â«${template.name}Â» Ð¿ÑÐ¸Ð¼ÐµÐ½ÑÐ½`,
     });
   }, [applyEntriesChange, selectedWeekTemplateId, tagList, weekTemplates]);
 
@@ -1444,7 +1444,7 @@ export default function TrackingPage() {
           const totalCells = cells.length;
           clearSelectedCells(cells, {
             undoLabel: "Удаление выделения",
-            successMessage: `РЈРґР°Р»РµРЅРѕ ${totalCells} Р±Р»РѕРєРѕРІ`,
+            successMessage: `Удалено ${totalCells} блоков`,
             clearSelection: true,
           });
           e.preventDefault();
@@ -1465,7 +1465,7 @@ export default function TrackingPage() {
           }
           setClipboard(copied);
           clipboardRef.current = copied;
-          toast.success(`РЎРєРѕРїРёСЂРѕРІР°РЅРѕ ${copied.length} Р±Р»РѕРєРѕРІ`);
+          toast.success(`Скопировано ${copied.length} блоков`);
           e.preventDefault();
         }
       }
@@ -1479,7 +1479,7 @@ export default function TrackingPage() {
 
       const target = pasteTargetRef.current;
       if (!target) {
-        toast.info("РљР»РёРєРЅРёС‚Рµ РЅР° СЏС‡РµР№РєСѓ, Р·Р°С‚РµРј РЅР°Р¶РјРёС‚Рµ Ctrl+V");
+        toast.info("Кликните на ячейку, затем нажмите Ctrl+V");
         return;
       }
 
@@ -1569,7 +1569,7 @@ export default function TrackingPage() {
               <ChevronRight className="w-4 h-4" />
             </Button>
             <Button variant="outline" size="sm" className="h-7 text-xs" onClick={goToday}>
-              РЎРµРіРѕРґРЅСЏ
+              Сегодня
             </Button>
           </div>
 
@@ -1597,7 +1597,7 @@ export default function TrackingPage() {
               onClick={() => setShowGaps((value) => !value)}
             >
               <AlertTriangle className="w-3 h-3" />
-              РџСѓСЃС‚РѕС‚С‹ ({unfilledGaps.length})
+              Пустоты ({unfilledGaps.length})
             </Button>
             <Button
               variant="outline"
@@ -1606,49 +1606,49 @@ export default function TrackingPage() {
               onClick={jumpToNextGap}
               disabled={unfilledGaps.length === 0}
             >
-              РЎР»РµРґ. РїСѓСЃС‚РѕС‚Р°
+              След. пустота
             </Button>
           </div>
 
           <div className="flex items-center gap-1">
             <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={saveCurrentDayTemplate}>
               <Save className="w-3 h-3" />
-              Р”РµРЅСЊ
+              День
             </Button>
             <Select value={selectedDayTemplateId} onValueChange={setSelectedDayTemplateId}>
               <SelectTrigger className="h-7 w-36 text-xs bg-transparent border-border">
-                <SelectValue placeholder="РЁР°Р±Р»РѕРЅ РґРЅСЏ" />
+                <SelectValue placeholder="Шаблон дня" />
               </SelectTrigger>
               <SelectContent className="max-h-72 overflow-y-auto">
-                <SelectItem value="none">РЁР°Р±Р»РѕРЅ РґРЅСЏ</SelectItem>
+                <SelectItem value="none">Шаблон дня</SelectItem>
                 {dayTemplates.map((template) => (
                   <SelectItem key={template.id} value={template.id}>{template.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Button variant="outline" size="sm" className="h-7 text-xs" onClick={applySelectedDayTemplate} disabled={selectedDayTemplateId === "none"}>
-              РџСЂРёРјРµРЅРёС‚СЊ
+              Применить
             </Button>
           </div>
 
           <div className="flex items-center gap-1">
             <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={saveCurrentWeekTemplate}>
               <BookCopy className="w-3 h-3" />
-              РќРµРґРµР»СЏ
+              Неделя
             </Button>
             <Select value={selectedWeekTemplateId} onValueChange={setSelectedWeekTemplateId}>
               <SelectTrigger className="h-7 w-40 text-xs bg-transparent border-border">
-                <SelectValue placeholder="РЁР°Р±Р»РѕРЅ РЅРµРґРµР»Рё" />
+                <SelectValue placeholder="Шаблон недели" />
               </SelectTrigger>
               <SelectContent className="max-h-72 overflow-y-auto">
-                <SelectItem value="none">РЁР°Р±Р»РѕРЅ РЅРµРґРµР»Рё</SelectItem>
+                <SelectItem value="none">Шаблон недели</SelectItem>
                 {weekTemplates.map((template) => (
                   <SelectItem key={template.id} value={template.id}>{template.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Button variant="outline" size="sm" className="h-7 text-xs" onClick={applySelectedWeekTemplate} disabled={selectedWeekTemplateId === "none"}>
-              РџСЂРёРјРµРЅРёС‚СЊ
+              Применить
             </Button>
           </div>
 
@@ -1662,7 +1662,7 @@ export default function TrackingPage() {
               <div className="flex items-center gap-1">
                 {isSingleDay && (
                   <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={handleCopy}>
-                    <Copy className="w-3 h-3" /> РљРѕРїРёСЂРѕРІР°С‚СЊ ({rowCount})
+                    <Copy className="w-3 h-3" /> Копировать ({rowCount})
                   </Button>
                 )}
                 <Button
@@ -1685,9 +1685,9 @@ export default function TrackingPage() {
                     });
                   }}
                 >
-                  <Trash2 className="w-3 h-3" /> РЈРґР°Р»РёС‚СЊ ({totalCells})
+                  <Trash2 className="w-3 h-3" /> Удалить ({totalCells})
                 </Button>
-                <span className="text-xs text-white/50">РёР»Рё Delete</span>
+                <span className="text-xs text-white/50">или Delete</span>
               </div>
             );
           })()}
@@ -1695,12 +1695,12 @@ export default function TrackingPage() {
           {clipboard && (
             <div className="flex items-center gap-1.5 text-xs text-white/80 bg-primary/20 border border-primary/30 px-2 py-1 rounded">
               <Clipboard className="w-3 h-3" />
-              {clipboard.length} Р±Р»РѕРєРѕРІ РІ Р±СѓС„РµСЂРµ
+              {clipboard.length} блоков в буфере
               {pasteTargetDisplay
-                ? <span className="text-green-400 font-medium"> В· РЅР°Р¶РјРёС‚Рµ Ctrl+V РёР»Рё РџРљРњ в†’ Р’СЃС‚Р°РІРёС‚СЊ</span>
-                : <span className="text-white/50"> В· РєР»РёРєРЅРёС‚Рµ РЅР° СЏС‡РµР№РєСѓ РґР»СЏ РІСЃС‚Р°РІРєРё</span>
+                ? <span className="text-green-400 font-medium"> · нажмите Ctrl+V или ПКМ → Вставить</span>
+                : <span className="text-white/50"> · кликните на ячейку для вставки</span>
               }
-              <button className="hover:text-white ml-1" onClick={() => { setClipboard(null); clipboardRef.current = null; setPasteTargetDisplay(null); pasteTargetRef.current = null; }}>Г—</button>
+              <button className="hover:text-white ml-1" onClick={() => { setClipboard(null); clipboardRef.current = null; setPasteTargetDisplay(null); pasteTargetRef.current = null; }}>×</button>
             </div>
           )}
 
@@ -1711,7 +1711,7 @@ export default function TrackingPage() {
             onClick={handleCopyWeek}
           >
             <Copy className="w-3 h-3" />
-            РљРѕРїРёСЂРѕРІР°С‚СЊ РЅРµРґРµР»СЋ (672)
+            Копировать неделю (672)
           </Button>
 
           <Button
@@ -1721,7 +1721,7 @@ export default function TrackingPage() {
             onClick={() => setWeekImportDialogOpen(true)}
           >
             <FileInput className="w-3 h-3" />
-            РРјРїРѕСЂС‚РёСЂРѕРІР°С‚СЊ РІСЃСЋ РЅРµРґРµР»СЋ
+            Импортировать всю неделю
           </Button>
 
           {/* Import button */}
@@ -1730,19 +1730,19 @@ export default function TrackingPage() {
             onClick={() => {
               const pt = pasteTargetRef.current;
               if (!pt) {
-                toast.info("РЎРЅР°С‡Р°Р»Р° РєР»РёРєРЅРёС‚Рµ РЅР° СЏС‡РµР№РєСѓ, РєСѓРґР° РІСЃС‚Р°РІРёС‚СЊ РґР°РЅРЅС‹Рµ");
+                toast.info("Сначала кликните на ячейку, куда вставить данные");
                 return;
               }
               openImportDialog(pt);
             }}
-            title="РРјРїРѕСЂС‚ РёР· Excel (РІСЃС‚Р°РІСЊС‚Рµ РґР°РЅРЅС‹Рµ РІ РґРёР°Р»РѕРі)"
+            title="Импорт из Excel (вставьте данные в диалог)"
           >
-            <FileInput className="w-3 h-3" /> РРјРїРѕСЂС‚ РёР· Excel
+            <FileInput className="w-3 h-3" /> Импорт из Excel
           </Button>
 
           {/* Row height control */}
           <div className="flex items-center gap-2 ml-auto">
-            <span className="text-xs text-muted-foreground whitespace-nowrap">Р’С‹СЃРѕС‚Р° СЃС‚СЂРѕРє</span>
+            <span className="text-xs text-muted-foreground whitespace-nowrap">Высота строк</span>
             <Slider
               value={[rowHeight]}
               min={14}
@@ -1759,7 +1759,7 @@ export default function TrackingPage() {
 
       {/* в”Ђв”Ђ Grid + Sidebar в”Ђв”Ђ */}
       {isLoading ? (
-        <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">Р—Р°РіСЂСѓР·РєР°...</div>
+        <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">Загрузка...</div>
       ) : (
         <div className="flex-1 flex overflow-y-auto overflow-x-hidden">
           {/* в”Ђв”Ђ Main grid в”Ђв”Ђ */}
@@ -1875,7 +1875,7 @@ export default function TrackingPage() {
                                   type="button"
                                   className={`absolute bottom-0.5 right-0.5 z-10 h-2.5 w-2.5 rounded-sm border border-cyan-300 ${isFillSource ? "bg-cyan-300" : "bg-cyan-400"} shadow-sm`}
                                   onMouseDown={(e) => startFillDown(di, si, dateStr, tag, e)}
-                                  title="РџСЂРѕС‚СЏРЅСѓС‚СЊ РІРЅРёР·"
+                                  title="Протянуть вниз"
                                 />
                               )}
                             </td>
@@ -1888,8 +1888,8 @@ export default function TrackingPage() {
                             >
                               <Copy className="w-3.5 h-3.5 mr-2" />
                               {selection && selection.startDay === di && selection.startDay === selection.endDay
-                                ? `РљРѕРїРёСЂРѕРІР°С‚СЊ (${selection.end - selection.start + 1} Р±Р».)`
-                                : "РљРѕРїРёСЂРѕРІР°С‚СЊ РІС‹РґРµР»РµРЅРёРµ"}
+                                ? `Копировать (${selection.end - selection.start + 1} бл.)`
+                                : "Копировать выделение"}
                             </ContextMenuItem>
                             {/* Paste */}
                             <ContextMenuItem
@@ -1904,7 +1904,7 @@ export default function TrackingPage() {
                               }}
                             >
                               <Clipboard className="w-3.5 h-3.5 mr-2" />
-                              {clipboard ? `Р’СЃС‚Р°РІРёС‚СЊ (${clipboard.length} Р±Р».)` : "Р’СЃС‚Р°РІРёС‚СЊ..."}
+                              {clipboard ? `Вставить (${clipboard.length} бл.)` : "Вставить..."}
                             </ContextMenuItem>
                             <ContextMenuSeparator />
                             {/* Excel import */}
@@ -1912,7 +1912,7 @@ export default function TrackingPage() {
                               onClick={() => openImportDialog({ dayIdx: di, slotIdx: si })}
                             >
                               <FileInput className="w-3.5 h-3.5 mr-2" />
-                              РРјРїРѕСЂС‚ РёР· Excel...
+                              Импорт из Excel...
                             </ContextMenuItem>
                             <ContextMenuSeparator />
                             {/* Clear */}
@@ -1921,10 +1921,10 @@ export default function TrackingPage() {
                               className={entry?.tagId ? "text-destructive focus:text-destructive" : ""}
                               onClick={() => { if (entry?.tagId) clearSelectedCells([{ entryDate: dateStr, startTime: TIME_SLOTS[si].start }], { undoLabel: "Очистка ячейки" }); }}
                             >
-                              <Trash2 className="w-3.5 h-3.5 mr-2" />
-                              РћС‡РёСЃС‚РёС‚СЊ СЏС‡РµР№РєСѓ
+                              onClick={() => { if (entry?.tagId) clearSelectedCells([{ entryDate: dateStr, startTime: TIME_SLOTS[si].start }], { undoLabel: "ÐÑÐ¸ÑÑÐºÐ° ÑÑÐµÐ¹ÐºÐ¸" }); }}
+                              Очистить ячейку
                             </ContextMenuItem>
-                          </ContextMenuContent>
+                              ÐÑÐ¸ÑÑÐ¸ÑÑ ÑÑÐµÐ¹ÐºÑ
                         </ContextMenu>
                       );
                     })}
@@ -1966,13 +1966,13 @@ export default function TrackingPage() {
               <div className="px-3 py-2 border-b border-border">
                 <div className="text-xs font-semibold text-amber-400 uppercase tracking-wide flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
-                  Р Р°Р±РѕС‡РёРµ Р±Р»РѕРєРё
+                  Ð Ð°Ð±Ð¾ÑÐ¸Ðµ Ð±Ð»Ð¾ÐºÐ¸
                 </div>
                 <div className="text-[10px] text-white/80 mt-0.5">
-                  РќРѕСЂРјР°: {workNormBlocks} Р±Р»РѕРєРѕРІ = 100% ({blocksToHours(workNormBlocks).toFixed(1)}С‡)
+                  ÐÐ¾ÑÐ¼Ð°: {workNormBlocks} Ð±Ð»Ð¾ÐºÐ¾Ð² = 100% ({blocksToHours(workNormBlocks).toFixed(1)}Ñ)
                 </div>
                 <div className="mt-2 flex items-center gap-2">
-                  <span className="text-[10px] text-white/70 whitespace-nowrap">Р”РЅРµРІРЅР°СЏ РЅРѕСЂРјР°</span>
+                  <span className="text-[10px] text-white/70 whitespace-nowrap">ÐÐ½ÐµÐ²Ð½Ð°Ñ Ð½Ð¾ÑÐ¼Ð°</span>
                   <Input
                     type="number"
                     min={1}
@@ -1981,14 +1981,14 @@ export default function TrackingPage() {
                     onChange={(e) => setWorkNormBlocks(Number.parseInt(e.target.value || "0", 10))}
                     className="h-7 w-16 bg-input px-2 text-xs"
                   />
-                  <span className="text-[10px] text-white/50">РїРѕ 15 РјРёРЅСѓС‚</span>
+                  <span className="text-[10px] text-white/50">Ð¿Ð¾ 15 Ð¼Ð¸Ð½ÑÑ</span>
                 </div>
               </div>
 
               {/* в”Ђ Today progress в”Ђ */}
               <div className="px-3 pt-3 pb-2">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] text-white uppercase tracking-wide">РЎРµРіРѕРґРЅСЏ</span>
+                  <span className="text-[10px] text-white uppercase tracking-wide">Ð¡ÐµÐ³Ð¾Ð´Ð½Ñ</span>
                   <span className={`text-sm font-bold ${getEfficiencyTextClass(workPct)}`}>
                     {workPct}%
                   </span>
@@ -2000,7 +2000,7 @@ export default function TrackingPage() {
                   />
                 </div>
                 <div className="text-[10px] text-white/80 mt-1">
-                  {workBlocksToday.total} Р±Р». вЂў {workBlocksToday.total * 15} РјРёРЅ вЂў {blocksToHours(workBlocksToday.total).toFixed(1)}С‡
+                  {workBlocksToday.total} Ð±Ð». â¢ {workBlocksToday.total * 15} Ð¼Ð¸Ð½ â¢ {blocksToHours(workBlocksToday.total).toFixed(1)}Ñ
                 </div>
               </div>
 
@@ -2011,7 +2011,7 @@ export default function TrackingPage() {
                     <div key={t.name} className="flex items-center gap-2 px-3 py-0.5 hover:bg-muted/20">
                       <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
                       <span className="flex-1 text-[10px] text-white truncate">{t.name}</span>
-                      <span className="text-[10px] text-white/80 whitespace-nowrap">{(t.count * 15 / 60).toFixed(1)}С‡</span>
+                      <span className="text-[10px] text-white/80 whitespace-nowrap">{(t.count * 15 / 60).toFixed(1)}ч</span>
                     </div>
                   ))}
                 </div>
@@ -2020,13 +2020,13 @@ export default function TrackingPage() {
               {/* в”Ђ Summary stats в”Ђ */}
               <div className="mx-3 mt-1 pt-2 border-t border-border/50 pb-2 space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-white">РЎСЂ. Р·Р° РЅРµРґРµР»СЋ</span>
+                  <span className="text-[10px] text-white">Ð¡Ñ. Ð·Ð° Ð½ÐµÐ´ÐµÐ»Ñ</span>
                   <span className={`text-xs font-semibold ${getEfficiencyTextClass(selectedWeekAvg)}`}>
                     {selectedWeekAvg}%
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-white">РЎСЂ. Р·Р° 7 РґРЅРµР№</span>
+                  <span className="text-[10px] text-white">Ð¡Ñ. Ð·Ð° 7 Ð´Ð½ÐµÐ¹</span>
                   <span className={`text-xs font-semibold ${getEfficiencyTextClass(selectedWeekAvg)}`}>
                     {selectedWeekAvg}%
                   </span>
@@ -2035,7 +2035,7 @@ export default function TrackingPage() {
 
               {/* в”Ђ Last 7 days breakdown в”Ђ */}
               <div className="mx-3 pt-2 border-t border-border/50 pb-3">
-                <div className="text-[10px] text-white uppercase tracking-wide mb-1.5">РџРѕСЃР»РµРґРЅРёРµ 7 РґРЅРµР№</div>
+                <div className="text-[10px] text-white uppercase tracking-wide mb-1.5">ÐÐ¾ÑÐ»ÐµÐ´Ð½Ð¸Ðµ 7 Ð´Ð½ÐµÐ¹</div>
                 <div className="space-y-1">
                   {selectedWeekEfficiency.map(day => (
                     <div key={day.dateStr} className="flex items-center gap-2 opacity-100">
@@ -2061,7 +2061,7 @@ export default function TrackingPage() {
               <div className="mx-3 pt-2 border-t border-border/50 pb-3">
                 <div className="text-[10px] text-white uppercase tracking-wide mb-2 flex items-center gap-1.5">
                   <Target className="w-3 h-3 text-sky-400" />
-                  Р¦РµР»Рё РїРѕ С‚РµРіР°Рј
+                  Ð¦ÐµÐ»Ð¸ Ð¿Ð¾ ÑÐµÐ³Ð°Ð¼
                 </div>
                 <div className="space-y-1.5">
                   {tagGoalRows.slice(0, 6).map((goal) => (
@@ -2069,7 +2069,7 @@ export default function TrackingPage() {
                       <div className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: goal.color }} />
                         <span className="flex-1 text-[10px] text-white truncate">{goal.name}</span>
-                        <span className="text-[10px] text-white/70">{goal.actualHours.toFixed(1)} / {goal.goalHours.toFixed(1)}С‡</span>
+                        <span className="text-[10px] text-white/70">{goal.actualHours.toFixed(1)} / {goal.goalHours.toFixed(1)}ч</span>
                       </div>
                       <div className="w-full h-1.5 bg-muted/30 rounded-full overflow-hidden">
                         <div className="h-full rounded-full" style={{ width: `${goal.pct}%`, backgroundColor: goal.color }} />
@@ -2080,10 +2080,10 @@ export default function TrackingPage() {
               </div>
             )}
             <div className="px-3 py-2 border-b border-border bg-background">
-              <div className="text-xs font-semibold text-white uppercase tracking-wide">РўРµРіРё РЅРµРґРµР»Рё</div>
+              <div className="text-xs font-semibold text-white uppercase tracking-wide">Теги недели</div>
             </div>
             {tagStats.length === 0 ? (
-              <div className="px-3 py-4 text-xs text-white/80">РќРµС‚ РґР°РЅРЅС‹С…</div>
+              <div className="px-3 py-4 text-xs text-white/80">Нет данных</div>
             ) : (
               <div className="py-1">
                 {tagStats.map(t => {
@@ -2094,15 +2094,15 @@ export default function TrackingPage() {
                       <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
                       <span className="flex-1 text-xs text-white truncate">{t.name}</span>
                       <span className="text-[10px] text-white/80 whitespace-nowrap">
-                        {hours % 1 === 0 ? hours : hours.toFixed(1)}С‡ ({pct}%)
+                        {hours % 1 === 0 ? hours : hours.toFixed(1)}ч ({pct}%)
                       </span>
                     </div>
                   );
                 })}
                 <div className="mx-3 mt-1 pt-1.5 border-t border-border/50">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-white">РС‚РѕРіРѕ</span>
-                    <span className="text-xs text-white font-medium">{(totalBlocks * 15 / 60).toFixed(1)}С‡</span>
+                    <span className="text-xs text-white">ÐÑÐ¾Ð³Ð¾</span>
+                    <span className="text-xs text-white font-medium">{(totalBlocks * 15 / 60).toFixed(1)}Ñ</span>
                   </div>
                 </div>
               </div>
@@ -2134,16 +2134,16 @@ export default function TrackingPage() {
                   onClick={handleContinue}
                 >
                   <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cellTag.color }} />
-                  <span className="flex-1 text-left truncate">РџСЂРѕРґРѕР»Р¶РёС‚СЊ: {cellTag.name}</span>
-                  <span className="text-[10px] opacity-60">в†’</span>
+                  <span className="flex-1 text-left truncate">Продолжить: {cellTag.name}</span>
+                  <span className="text-[10px] opacity-60">→</span>
                 </button>
-              );
-            })()}
+                  <span className="flex-1 text-left truncate">ÐÑÐ¾Ð´Ð¾Ð»Ð¶Ð¸ÑÑ: {cellTag.name}</span>
+                  <span className="text-[10px] opacity-60">â</span>
             <div className="text-[10px] text-muted-foreground font-medium px-2 pb-1.5 border-b border-border mb-1">
-              {menuCell ? "РЎРјРµРЅРёС‚СЊ С‚РµРі" : selection ? `Р’С‹Р±СЂР°РЅРѕ ${(selection.end - selection.start + 1) * (selection.endDay - selection.startDay + 1)} Р±Р»РѕРєРѕРІ` : "Р’С‹Р±РѕСЂ С‚РµРіР°"}
+              {menuCell ? "Сменить тег" : selection ? `Выбрано ${(selection.end - selection.start + 1) * (selection.endDay - selection.startDay + 1)} блоков` : "Выбор тега"}
             </div>
             <div className="space-y-0.5 max-h-64 overflow-y-auto">
-              {/* Top-7 most-used tags this week вЂ” highlighted */}
+              {menuCell ? "Ð¡Ð¼ÐµÐ½Ð¸ÑÑ ÑÐµÐ³" : selection ? `ÐÑÐ±ÑÐ°Ð½Ð¾ ${(selection.end - selection.start + 1) * (selection.endDay - selection.startDay + 1)} Ð±Ð»Ð¾ÐºÐ¾Ð²` : "ÐÑÐ±Ð¾Ñ ÑÐµÐ³Ð°"}
               {top7TagIds.size > 0 && (() => {
                 const top7 = tagList.filter(t => top7TagIds.has(t.id));
                 const rest = tagList.filter(t => !top7TagIds.has(t.id));
@@ -2195,14 +2195,14 @@ export default function TrackingPage() {
                 onClick={() => handleMultiTagSelect(null)}
               >
                 <Trash2 className="w-3 h-3" />
-                РћС‡РёСЃС‚РёС‚СЊ
+                Очистить
               </button>
             </div>
             <div className="border-t border-border mt-1.5 pt-1.5 flex gap-1">
               <Input
                 value={newTagForMulti}
                 onChange={e => setNewTagForMulti(e.target.value)}
-                placeholder="РќРѕРІС‹Р№ С‚РµРі..."
+                placeholder="Новый тег..."
                 className="h-7 text-xs bg-input"
                 autoFocus
                 onKeyDown={e => {
@@ -2219,32 +2219,36 @@ export default function TrackingPage() {
         </>
       )}
 
-      {/* в”Ђв”Ђ Excel Import Dialog в”Ђв”Ђ */}
+      {/* Excel Import Dialog */}
       <Dialog open={importDialogOpen} onOpenChange={(open) => { setImportDialogOpen(open); if (!open) setActiveCell(null); }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>РРјРїРѕСЂС‚ РёР· Excel</DialogTitle>
+            <DialogTitle>ÐÐ¼Ð¿Ð¾ÑÑ Ð¸Ð· Excel</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              РЎРєРѕРїРёСЂСѓР№С‚Рµ РґР°РЅРЅС‹Рµ РёР· Excel (Ctrl+C) Рё РІСЃС‚Р°РІСЊС‚Рµ РёС… РЅРёР¶Рµ (Ctrl+V РІ РїРѕР»Рµ РІРІРѕРґР°).
-              РџРѕРґРґРµСЂР¶РёРІР°РµС‚СЃСЏ С„РѕСЂРјР°С‚: <code className="text-xs bg-muted px-1 rounded">РІСЂРµРјСЏ[Tab]С‚РµРі</code> РёР»Рё РїСЂРѕСЃС‚Рѕ <code className="text-xs bg-muted px-1 rounded">С‚РµРі</code> РЅР° РєР°Р¶РґРѕР№ СЃС‚СЂРѕРєРµ.
+              Ð¡ÐºÐ¾Ð¿Ð¸ÑÑÐ¹ÑÐµ Ð´Ð°Ð½Ð½ÑÐµ Ð¸Ð· Excel (Ctrl+C) Ð¸ Ð²ÑÑÐ°Ð²ÑÑÐµ Ð¸Ñ Ð½Ð¸Ð¶Ðµ (Ctrl+V Ð² Ð¿Ð¾Ð»Ðµ Ð²Ð²Ð¾Ð´Ð°).
+              ÐÐ¾Ð´Ð´ÐµÑÐ¶Ð¸Ð²Ð°ÐµÑÑÑ ÑÐ¾ÑÐ¼Ð°Ñ: <code className="text-xs bg-muted px-1 rounded">Ð²ÑÐµÐ¼Ñ[Tab]ÑÐµÐ³</code> Ð¸Ð»Ð¸ Ð¿ÑÐ¾ÑÑÐ¾ <code className="text-xs bg-muted px-1 rounded">ÑÐµÐ³</code> Ð½Ð° ÐºÐ°Ð¶Ð´Ð¾Ð¹ ÑÑÑÐ¾ÐºÐµ.
             </p>
             <textarea
               className="w-full h-48 p-2 text-sm font-mono bg-input border border-border rounded resize-none focus:outline-none focus:ring-1 focus:ring-primary text-foreground"
-              placeholder={"6:30\tСЃРѕРЅ\n6:45\tСЃРѕРЅ\n7:00\tСЂР°Р±РѕС‚Р°\n..."}
+              placeholder={"6:30	ÑÐ¾Ð½
+6:45	ÑÐ¾Ð½
+7:00	ÑÐ°Ð±Ð¾ÑÐ°
+..."}
               value={importText}
               onChange={e => setImportText(e.target.value)}
               autoFocus
             />
             <p className="text-xs text-muted-foreground">
-              Р”Р°РЅРЅС‹Рµ Р±СѓРґСѓС‚ РІСЃС‚Р°РІР»РµРЅС‹ РЅР°С‡РёРЅР°СЏ СЃ РІС‹Р±СЂР°РЅРЅРѕР№ СЏС‡РµР№РєРё. РќРµРёР·РІРµСЃС‚РЅС‹Рµ С‚РµРіРё СЃРѕР·РґР°РґСѓС‚СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё.
+              ÐÐ°Ð½Ð½ÑÐµ Ð±ÑÐ´ÑÑ Ð²ÑÑÐ°Ð²Ð»ÐµÐ½Ñ Ð½Ð°ÑÐ¸Ð½Ð°Ñ Ñ Ð²ÑÐ±ÑÐ°Ð½Ð½Ð¾Ð¹ ÑÑÐµÐ¹ÐºÐ¸. ÐÐµÐ¸Ð·Ð²ÐµÑÑÐ½ÑÐµ ÑÐµÐ³Ð¸ ÑÐ¾Ð·Ð´Ð°Ð´ÑÑÑÑ Ð°Ð²ÑÐ¾Ð¼Ð°ÑÐ¸ÑÐµÑÐºÐ¸.
             </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setImportDialogOpen(false); setActiveCell(null); }}>РћС‚РјРµРЅР°</Button>
+            <Button variant="outline" onClick={() => { setImportDialogOpen(false); setActiveCell(null); }}>ÐÑÐ¼ÐµÐ½Ð°</Button>
             <Button onClick={handleImportConfirm} disabled={!importText.trim()}>
-              Р’СЃС‚Р°РІРёС‚СЊ {importText.trim() ? `(${importText.trim().split(/\r?\n/).filter(l => l.trim()).length} СЃС‚СЂРѕРє)` : ""}
+              ÐÑÑÐ°Ð²Ð¸ÑÑ {importText.trim() ? `(${importText.trim().split(/?
+/).filter(l => l.trim()).length} ÑÑÑÐ¾Ðº)` : ""}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2253,31 +2257,41 @@ export default function TrackingPage() {
       <Dialog open={weekImportDialogOpen} onOpenChange={(open) => { setWeekImportDialogOpen(open); if (!open) setWeekImportText(""); }}>
         <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>РРјРїРѕСЂС‚РёСЂРѕРІР°С‚СЊ РІСЃСЋ РЅРµРґРµР»СЋ</DialogTitle>
+            <DialogTitle>ÐÐ¼Ð¿Ð¾ÑÑÐ¸ÑÐ¾Ð²Ð°ÑÑ Ð²ÑÑ Ð½ÐµÐ´ÐµÐ»Ñ</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Р’СЃС‚Р°РІСЊС‚Рµ СЃСЋРґР° РІСЃСЋ РЅРµРґРµР»СЋ С†РµР»РёРєРѕРј: <code className="text-xs bg-muted px-1 rounded">672 СЃС‚СЂРѕРєРё РїРѕРґСЂСЏРґ</code>.
-              РџРµСЂРІС‹Рµ 96 СЃС‚СЂРѕРє вЂ” РїРѕРЅРµРґРµР»СЊРЅРёРє, СЃР»РµРґСѓСЋС‰РёРµ 96 вЂ” РІС‚РѕСЂРЅРёРє, РїРѕС‚РѕРј СЃСЂРµРґР° Рё С‚Р°Рє РґРѕ РІРѕСЃРєСЂРµСЃРµРЅСЊСЏ.
-              Р•СЃР»Рё РёР· Excel РїСЂРёР»РµС‚РёС‚ РµС‰С‘ РїРµСЂРІС‹Р№ СЃС‚РѕР»Р±РµС† СЃРѕ РІСЂРµРјРµРЅРµРј, РѕРЅ С‚РѕР¶Рµ РїРѕРґРґРµСЂР¶РёРІР°РµС‚СЃСЏ.
+              ÐÑÑÐ°Ð²ÑÑÐµ ÑÑÐ´Ð° Ð²ÑÑ Ð½ÐµÐ´ÐµÐ»Ñ ÑÐµÐ»Ð¸ÐºÐ¾Ð¼: <code className="text-xs bg-muted px-1 rounded">672 ÑÑÑÐ¾ÐºÐ¸ Ð¿Ð¾Ð´ÑÑÐ´</code>.
+              ÐÐµÑÐ²ÑÐµ 96 ÑÑÑÐ¾Ðº â Ð¿Ð¾Ð½ÐµÐ´ÐµÐ»ÑÐ½Ð¸Ðº, ÑÐ»ÐµÐ´ÑÑÑÐ¸Ðµ 96 â Ð²ÑÐ¾ÑÐ½Ð¸Ðº, Ð¿Ð¾ÑÐ¾Ð¼ ÑÑÐµÐ´Ð° Ð¸ ÑÐ°Ðº Ð´Ð¾ Ð²Ð¾ÑÐºÑÐµÑÐµÐ½ÑÑ.
+              ÐÑÐ»Ð¸ Ð¸Ð· Excel Ð¿ÑÐ¸Ð»ÐµÑÐ¸Ñ ÐµÑÑ Ð¿ÐµÑÐ²ÑÐ¹ ÑÑÐ¾Ð»Ð±ÐµÑ ÑÐ¾ Ð²ÑÐµÐ¼ÐµÐ½ÐµÐ¼, Ð¾Ð½ ÑÐ¾Ð¶Ðµ Ð¿Ð¾Ð´Ð´ÐµÑÐ¶Ð¸Ð²Ð°ÐµÑÑÑ.
             </p>
             <textarea
               className="w-full h-80 p-2 text-sm font-mono bg-input border border-border rounded resize-none focus:outline-none focus:ring-1 focus:ring-primary text-foreground"
-              placeholder={"СЃРѕРЅ\nСЃРѕРЅ\nСЂР°Р±РѕС‚Р°\n...\n[96 СЃС‚СЂРѕРє РїРѕРЅРµРґРµР»СЊРЅРёРєР°]\nСЃРѕРЅ\nСЃРѕРЅ\nС‚Р°РєС‚РёРєР°\n...\n[96 СЃС‚СЂРѕРє РІС‚РѕСЂРЅРёРєР°]\n..."}
+              placeholder={"ÑÐ¾Ð½
+ÑÐ¾Ð½
+ÑÐ°Ð±Ð¾ÑÐ°
+...
+[96 ÑÑÑÐ¾Ðº Ð¿Ð¾Ð½ÐµÐ´ÐµÐ»ÑÐ½Ð¸ÐºÐ°]
+ÑÐ¾Ð½
+ÑÐ¾Ð½
+ÑÐ°ÐºÑÐ¸ÐºÐ°
+...
+[96 ÑÑÑÐ¾Ðº Ð²ÑÐ¾ÑÐ½Ð¸ÐºÐ°]
+..."}
               value={weekImportText}
               onChange={e => setWeekImportText(e.target.value)}
               autoFocus
             />
             <p className="text-xs text-muted-foreground">
-              РРјРїРѕСЂС‚ Р·Р°РїРѕР»РЅРёС‚ С‚РµРєСѓС‰СѓСЋ РѕС‚РєСЂС‹С‚СѓСЋ РЅРµРґРµР»СЋ С†РµР»РёРєРѕРј. РќРµРёР·РІРµСЃС‚РЅС‹Рµ С‚РµРіРё Р±СѓРґСѓС‚ СЃРѕР·РґР°РЅС‹ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё.
+              ÐÐ¼Ð¿Ð¾ÑÑ Ð·Ð°Ð¿Ð¾Ð»Ð½Ð¸Ñ ÑÐµÐºÑÑÑÑ Ð¾ÑÐºÑÑÑÑÑ Ð½ÐµÐ´ÐµÐ»Ñ ÑÐµÐ»Ð¸ÐºÐ¾Ð¼. ÐÐµÐ¸Ð·Ð²ÐµÑÑÐ½ÑÐµ ÑÐµÐ³Ð¸ Ð±ÑÐ´ÑÑ ÑÐ¾Ð·Ð´Ð°Ð½Ñ Ð°Ð²ÑÐ¾Ð¼Ð°ÑÐ¸ÑÐµÑÐºÐ¸.
             </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setWeekImportDialogOpen(false); setWeekImportText(""); }}>
-              РћС‚РјРµРЅР°
+              ÐÑÐ¼ÐµÐ½Ð°
             </Button>
             <Button onClick={handleWeekImportConfirm} disabled={!weekImportText.trim()}>
-              РРјРїРѕСЂС‚РёСЂРѕРІР°С‚СЊ РЅРµРґРµР»СЋ
+              ÐÐ¼Ð¿Ð¾ÑÑÐ¸ÑÐ¾Ð²Ð°ÑÑ Ð½ÐµÐ´ÐµÐ»Ñ
             </Button>
           </DialogFooter>
         </DialogContent>
