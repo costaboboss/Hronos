@@ -121,7 +121,6 @@ function getDayScenarioClass(date: string, volume: number, maxVolume: number) {
   if (volume <= 0) {
     return weekday === 0 || weekday === 6 ? "bg-[#0c1017]" : "bg-[#0c1118]";
   }
-
   const ratio = maxVolume > 0 ? volume / maxVolume : 0;
   if (ratio >= 0.8) return "bg-emerald-950/65";
   if (ratio >= 0.45) return "bg-cyan-950/55";
@@ -168,22 +167,22 @@ function parseRussianMonthToken(token: string) {
     мар: 3,
     апрель: 4,
     апр: 4,
-    июнь: 6,
-    июль: 7,
-    август: 8,
-    сентябрь: 9,
-    октябрь: 10,
-    ноябрь: 11,
-    декабрь: 12,
     май: 5,
     мая: 5,
+    июнь: 6,
     июн: 6,
+    июль: 7,
     июл: 7,
+    август: 8,
     авг: 8,
+    сентябрь: 9,
     сен: 9,
     сент: 9,
+    октябрь: 10,
     окт: 10,
+    ноябрь: 11,
     ноя: 11,
+    декабрь: 12,
     дек: 12,
   };
   return months[normalized] ?? null;
@@ -219,12 +218,7 @@ function extractParagraphBlocks(cellHtml: string) {
   );
 
   return rawBlocks
-    .map(block =>
-      block
-        .split("\n")
-        .map(line => line.trim())
-        .filter(Boolean)
-    )
+    .map(block => block.split("\n").map(line => line.trim()).filter(Boolean))
     .filter(lines => lines.length > 0);
 }
 
@@ -232,17 +226,12 @@ function parseExerciseParagraph(lines: string[]) {
   const joined = lines.join("\n").trim();
   if (!joined || /^итого[:\s]/i.test(joined)) return null;
 
-  let exerciseName = lines[0]
-    .replace(/[:：]\s*$/, "")
-    .replace(/\s*<b>.*$/i, "")
-    .trim();
-
+  let exerciseName = lines[0].replace(/[:：]\s*$/, "").trim();
   const restLines = [...lines.slice(1)];
-
   const sameLineMatch = exerciseName.match(/^(.+?)(\d+(?:[.,]\d+)?\s*(?:кг|kg)|\d+\.)/i);
   if (sameLineMatch) {
     exerciseName = sameLineMatch[1].trim().replace(/[:：]\s*$/, "");
-    restLines.unshift(exerciseName.length ? lines[0].slice(sameLineMatch[1].length).trim() : lines[0].trim());
+    restLines.unshift(lines[0].slice(sameLineMatch[1].length).trim());
   }
 
   const cleanedRest = restLines
@@ -253,7 +242,6 @@ function parseExerciseParagraph(lines: string[]) {
 
   const rawInput = cleanedRest.join("\n").trim();
   if (!exerciseName || !rawInput) return null;
-
   return { exerciseName, rawInput };
 }
 
@@ -275,46 +263,28 @@ function parseLegacyImport(html: string, year: number, month: number) {
     const monthTitle = stripHtml(rowMatches[0]);
     const monthMatch = monthTitle.match(/[А-Яа-яA-Za-z.]+/);
     const tableMonth = monthMatch ? parseRussianMonthToken(monthMatch[0]) : month;
-
     const dateCells = getCellInnerHtmlList(rowMatches[1]).map(cell => stripHtml(cell));
     const columnDates = dateCells.map(text => {
       const dotted = text.match(/(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?/);
-      if (dotted) {
-        const day = Number(dotted[1]);
-        const parsedMonth = Number(dotted[2]);
-        const parsedYear = dotted[3] ? Number(dotted[3]) : year;
-        return format(new Date(parsedYear, parsedMonth - 1, day), "yyyy-MM-dd");
-      }
-
+      if (dotted) return format(new Date(dotted[3] ? Number(dotted[3]) : year, Number(dotted[2]) - 1, Number(dotted[1])), "yyyy-MM-dd");
       const dayOnly = text.match(/^\d{1,2}$/);
-      if (dayOnly && tableMonth) {
-        return format(new Date(year, tableMonth - 1, Number(dayOnly[0])), "yyyy-MM-dd");
-      }
-
+      if (dayOnly && tableMonth) return format(new Date(year, tableMonth - 1, Number(dayOnly[0])), "yyyy-MM-dd");
       const russianShort = text.match(/(\d{1,2})\s+([А-Яа-яA-Za-z.]+)/);
       if (russianShort) {
         const parsedMonth = parseRussianMonthToken(russianShort[2]);
-        if (parsedMonth) {
-          return format(new Date(year, parsedMonth - 1, Number(russianShort[1])), "yyyy-MM-dd");
-        }
+        if (parsedMonth) return format(new Date(year, parsedMonth - 1, Number(russianShort[1])), "yyyy-MM-dd");
       }
-
       return null;
     });
 
-    const detailRows = rowMatches.slice(4);
-    for (const rowHtml of detailRows) {
+    for (const rowHtml of rowMatches.slice(4)) {
       const cells = getCellInnerHtmlList(rowHtml);
       cells.forEach((cellHtml, index) => {
         const date = columnDates[index];
         if (!date) return;
-
-        const paragraphs = extractParagraphBlocks(cellHtml);
-        paragraphs.forEach(paragraphLines => {
+        extractParagraphBlocks(cellHtml).forEach(paragraphLines => {
           const parsed = parseExerciseParagraph(paragraphLines);
-          if (!parsed) return;
-          if (!/\d/.test(parsed.rawInput)) return;
-
+          if (!parsed || !/\d/.test(parsed.rawInput)) return;
           imports.push({
             exerciseName: normalizeExerciseName(parsed.exerciseName),
             date,
@@ -358,7 +328,6 @@ export default function TrainingPage() {
 
   const year = cursorDate.getFullYear();
   const month = cursorDate.getMonth() + 1;
-
   const matrixQuery = trpc.training.matrixByMonth.useQuery({ year, month });
   const dashboardQuery = trpc.training.dashboard.useQuery();
   const sessionDetailsQuery = trpc.training.getSessionDetails.useQuery(
@@ -380,14 +349,13 @@ export default function TrainingPage() {
         setExerciseOrder(parsed);
       }
     } catch {
-      // Ignore invalid local state and fall back to server order.
+      // ignore
     }
   }, []);
 
   useEffect(() => {
     const ids = (matrixQuery.data?.exercises ?? []).map(exercise => exercise.id);
     if (!ids.length) return;
-
     setExerciseOrder(current => {
       const deduped = current.filter(id => ids.includes(id));
       const missing = ids.filter(id => !deduped.includes(id));
@@ -396,8 +364,7 @@ export default function TrainingPage() {
   }, [matrixQuery.data?.exercises]);
 
   useEffect(() => {
-    if (!exerciseOrder.length) return;
-    window.localStorage.setItem(EXERCISE_ORDER_STORAGE_KEY, JSON.stringify(exerciseOrder));
+    if (exerciseOrder.length) window.localStorage.setItem(EXERCISE_ORDER_STORAGE_KEY, JSON.stringify(exerciseOrder));
   }, [exerciseOrder]);
 
   useEffect(() => {
@@ -427,9 +394,7 @@ export default function TrainingPage() {
     onSuccess: async () => {
       await Promise.all([
         utils.training.matrixByMonth.invalidate({ year, month }),
-        selectedCell
-          ? utils.training.getSessionDetails.invalidate({ date: selectedCell.date })
-          : Promise.resolve(),
+        selectedCell ? utils.training.getSessionDetails.invalidate({ date: selectedCell.date }) : Promise.resolve(),
         utils.training.dashboard.invalidate(),
         utils.training.listRecentSessions.invalidate(),
       ]);
@@ -440,7 +405,6 @@ export default function TrainingPage() {
 
   useEffect(() => {
     if (!selectedCell) return;
-
     const dateSummary = matrixQuery.data?.days.find(day => day.date === selectedCell.date)?.summary;
     const session = sessionDetailsQuery.data;
     const sessionExercise = session?.exercises.find(item => item.exerciseId === selectedCell.exerciseId);
@@ -449,8 +413,7 @@ export default function TrainingPage() {
         .map(set => set.rawInput?.trim())
         .filter((value): value is string => Boolean(value))
         .join("\n") ??
-      matrixQuery.data?.exercises.find(item => item.id === selectedCell.exerciseId)?.cells[selectedCell.date]
-        ?.rawInput ??
+      matrixQuery.data?.exercises.find(item => item.id === selectedCell.exerciseId)?.cells[selectedCell.date]?.rawInput ??
       "";
 
     setEditorForm({
@@ -465,7 +428,6 @@ export default function TrainingPage() {
 
   const monthHeading = useMemo(() => format(cursorDate, "LLLL yyyy", { locale: ru }), [cursorDate]);
   const matrixDays = matrixQuery.data?.days ?? [];
-
   const exerciseRows = useMemo(() => {
     const rows = (matrixQuery.data?.exercises ?? []).map(exercise => {
       const total = matrixDays.reduce((sum, day) => sum + (exercise.cells[day.date]?.volume ?? 0), 0);
@@ -474,20 +436,12 @@ export default function TrainingPage() {
     });
     return reorderRows(rows, exerciseOrder);
   }, [exerciseOrder, matrixDays, matrixQuery.data?.exercises]);
-
-  const grandTotal = useMemo(
-    () => matrixDays.reduce((sum, day) => sum + (day.summary?.volume ?? 0), 0),
-    [matrixDays]
-  );
-
+  const grandTotal = useMemo(() => matrixDays.reduce((sum, day) => sum + (day.summary?.volume ?? 0), 0), [matrixDays]);
   const workoutDaysCount = matrixDays.filter(day => Boolean(day.summary)).length;
   const maxDayVolume = Math.max(0, ...matrixDays.map(day => day.summary?.volume ?? 0));
   const averageDayVolume = workoutDaysCount ? Math.round(grandTotal / workoutDaysCount) : 0;
   const importPreview = useMemo(() => parseLegacyImport(importText, year, month), [importText, month, year]);
-  const importPreviewDays = useMemo(
-    () => Array.from(new Set(importPreview.map(item => item.date))).sort(),
-    [importPreview]
-  );
+  const importPreviewDays = useMemo(() => Array.from(new Set(importPreview.map(item => item.date))).sort(), [importPreview]);
   const importPreviewExercises = useMemo(
     () => Array.from(new Set(importPreview.map(item => item.exerciseName))).sort((a, b) => a.localeCompare(b, "ru")),
     [importPreview]
@@ -520,7 +474,6 @@ export default function TrainingPage() {
       toast.error("Нужно указать название упражнения");
       return;
     }
-
     await createExercise.mutateAsync({
       name: exerciseForm.name.trim(),
       category: exerciseForm.category.trim() || undefined,
@@ -533,7 +486,6 @@ export default function TrainingPage() {
 
   async function handleSaveCell() {
     if (!selectedCell) return;
-
     await upsertCell.mutateAsync({
       date: selectedCell.date,
       exerciseId: selectedCell.exerciseId,
@@ -556,22 +508,15 @@ export default function TrainingPage() {
     const exerciseMap = new Map<string, { id: number }>(
       (matrixQuery.data?.exercises ?? []).map(exercise => [exercise.name.trim().toLowerCase(), { id: exercise.id }])
     );
-
     let importedCells = 0;
-
     for (const entry of parsedEntries) {
       const key = entry.exerciseName.trim().toLowerCase();
       let exercise = exerciseMap.get(key);
-
       if (!exercise) {
-        const createdExercise = await createExercise.mutateAsync({
-          name: entry.exerciseName,
-          volumeMode: "weight_reps",
-        });
+        const createdExercise = await createExercise.mutateAsync({ name: entry.exerciseName, volumeMode: "weight_reps" });
         exercise = { id: createdExercise.id };
         exerciseMap.set(key, exercise);
       }
-
       await upsertCell.mutateAsync({
         date: entry.date,
         exerciseId: exercise.id,
@@ -580,13 +525,11 @@ export default function TrainingPage() {
       });
       importedCells += 1;
     }
-
     await Promise.all([
       utils.training.matrixByMonth.invalidate({ year, month }),
       utils.training.dashboard.invalidate(),
       utils.training.listExercises.invalidate(),
     ]);
-
     setImportOpen(false);
     setImportText("");
     setSelectedImportKeys([]);
@@ -601,453 +544,113 @@ export default function TrainingPage() {
             <div className="text-[10px] uppercase tracking-[0.35em] text-slate-500">Training Matrix</div>
             <h1 className="text-2xl font-semibold tracking-tight">Матрица тренировок</h1>
             <p className="max-w-4xl text-sm text-slate-400">
-              Теперь экран ещё ближе к вашему табличному листу: служебная строка месяца, плотная сетка,
-              многослойные шапки дней, реальные подходы прямо в ячейке и ручной порядок упражнений.
+              Экран ведения журнала тренировок с месячной матрицей, аналитикой и импортом старых HTML-записей.
             </p>
           </div>
-
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center border border-white/10 bg-[#10161d]">
-              <button
-                type="button"
-                className={`px-3 py-2 text-xs uppercase tracking-[0.2em] ${
-                  compactMode ? "bg-white/10 text-slate-100" : "text-slate-500"
-                }`}
-                onClick={() => setCompactMode(true)}
-              >
-                Плотно
-              </button>
-              <button
-                type="button"
-                className={`px-3 py-2 text-xs uppercase tracking-[0.2em] ${
-                  compactMode ? "text-slate-500" : "bg-white/10 text-slate-100"
-                }`}
-                onClick={() => setCompactMode(false)}
-              >
-                Свободно
-              </button>
+              <button type="button" className={`px-3 py-2 text-xs uppercase tracking-[0.2em] ${compactMode ? "bg-white/10 text-slate-100" : "text-slate-500"}`} onClick={() => setCompactMode(true)}>Плотно</button>
+              <button type="button" className={`px-3 py-2 text-xs uppercase tracking-[0.2em] ${compactMode ? "text-slate-500" : "bg-white/10 text-slate-100"}`} onClick={() => setCompactMode(false)}>Свободно</button>
             </div>
-            <Button
-              variant="outline"
-              className="rounded-none border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
-              onClick={() => setCursorDate(current => addMonths(current, -1))}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <div className="min-w-[190px] border border-white/10 bg-[#10161d] px-3 py-2 text-center text-sm font-medium capitalize">
-              {monthHeading}
-            </div>
-            <Button
-              variant="outline"
-              className="rounded-none border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
-              onClick={() => setCursorDate(current => addMonths(current, 1))}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              className="rounded-none border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
-              onClick={() => setCursorDate(new Date())}
-            >
-              Текущий месяц
-            </Button>
-            <Button
-              variant="outline"
-              className="rounded-none border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
-              onClick={() => setImportOpen(true)}
-            >
-              Импорт HTML
-            </Button>
+            <Button variant="outline" className="rounded-none border-white/10 bg-white/5 text-slate-100 hover:bg-white/10" onClick={() => setCursorDate(current => addMonths(current, -1))}><ChevronLeft className="h-4 w-4" /></Button>
+            <div className="min-w-[190px] border border-white/10 bg-[#10161d] px-3 py-2 text-center text-sm font-medium capitalize">{monthHeading}</div>
+            <Button variant="outline" className="rounded-none border-white/10 bg-white/5 text-slate-100 hover:bg-white/10" onClick={() => setCursorDate(current => addMonths(current, 1))}><ChevronRight className="h-4 w-4" /></Button>
+            <Button variant="outline" className="rounded-none border-white/10 bg-white/5 text-slate-100 hover:bg-white/10" onClick={() => setCursorDate(new Date())}>Текущий месяц</Button>
+            <Button variant="outline" className="rounded-none border-white/10 bg-white/5 text-slate-100 hover:bg-white/10" onClick={() => setImportOpen(true)}>Импорт HTML</Button>
           </div>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
           <div className="space-y-4">
             <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Plus className="h-4 w-4" />
-                  Новое упражнение
-                </CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Plus className="h-4 w-4" />Новое упражнение</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                <Input
-                  placeholder="Название упражнения"
-                  className="rounded-none border-white/10 bg-white/5"
-                  value={exerciseForm.name}
-                  onChange={event => setExerciseForm(current => ({ ...current, name: event.target.value }))}
-                />
-                <Input
-                  placeholder="Категория"
-                  className="rounded-none border-white/10 bg-white/5"
-                  value={exerciseForm.category}
-                  onChange={event => setExerciseForm(current => ({ ...current, category: event.target.value }))}
-                />
-                <Input
-                  placeholder="Основная группа мышц"
-                  className="rounded-none border-white/10 bg-white/5"
-                  value={exerciseForm.primaryMuscleGroup}
-                  onChange={event =>
-                    setExerciseForm(current => ({ ...current, primaryMuscleGroup: event.target.value }))
-                  }
-                />
-                <Input
-                  placeholder="Оборудование"
-                  className="rounded-none border-white/10 bg-white/5"
-                  value={exerciseForm.equipment}
-                  onChange={event => setExerciseForm(current => ({ ...current, equipment: event.target.value }))}
-                />
-                <Select
-                  value={exerciseForm.volumeMode}
-                  onValueChange={value =>
-                    setExerciseForm(current => ({ ...current, volumeMode: value as TrainingVolumeMode }))
-                  }
-                >
-                  <SelectTrigger className="rounded-none border-white/10 bg-white/5">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(Object.keys(volumeModeLabels) as TrainingVolumeMode[]).map(mode => (
-                      <SelectItem key={mode} value={mode}>
-                        {volumeModeLabels[mode]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
+                <Input placeholder="Название упражнения" className="rounded-none border-white/10 bg-white/5" value={exerciseForm.name} onChange={event => setExerciseForm(current => ({ ...current, name: event.target.value }))} />
+                <Input placeholder="Категория" className="rounded-none border-white/10 bg-white/5" value={exerciseForm.category} onChange={event => setExerciseForm(current => ({ ...current, category: event.target.value }))} />
+                <Input placeholder="Основная группа мышц" className="rounded-none border-white/10 bg-white/5" value={exerciseForm.primaryMuscleGroup} onChange={event => setExerciseForm(current => ({ ...current, primaryMuscleGroup: event.target.value }))} />
+                <Input placeholder="Оборудование" className="rounded-none border-white/10 bg-white/5" value={exerciseForm.equipment} onChange={event => setExerciseForm(current => ({ ...current, equipment: event.target.value }))} />
+                <Select value={exerciseForm.volumeMode} onValueChange={value => setExerciseForm(current => ({ ...current, volumeMode: value as TrainingVolumeMode }))}>
+                  <SelectTrigger className="rounded-none border-white/10 bg-white/5"><SelectValue /></SelectTrigger>
+                  <SelectContent>{(Object.keys(volumeModeLabels) as TrainingVolumeMode[]).map(mode => <SelectItem key={mode} value={mode}>{volumeModeLabels[mode]}</SelectItem>)}</SelectContent>
                 </Select>
-                <Textarea
-                  placeholder="Заметки"
-                  className="rounded-none border-white/10 bg-white/5"
-                  value={exerciseForm.notes}
-                  onChange={event => setExerciseForm(current => ({ ...current, notes: event.target.value }))}
-                />
-                <Button className="w-full rounded-none" onClick={handleCreateExercise} disabled={createExercise.isPending}>
-                  Добавить упражнение
-                </Button>
+                <Textarea placeholder="Заметки" className="rounded-none border-white/10 bg-white/5" value={exerciseForm.notes} onChange={event => setExerciseForm(current => ({ ...current, notes: event.target.value }))} />
+                <Button className="w-full rounded-none" onClick={handleCreateExercise} disabled={createExercise.isPending}>Добавить упражнение</Button>
               </CardContent>
             </Card>
 
             <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
-              <CardHeader>
-                <CardTitle className="text-base">Сводка</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-base">Сводка</CardTitle></CardHeader>
               <CardContent className="space-y-3 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Упражнений в системе</span>
-                  <span className="font-semibold">{dashboardQuery.data?.summary.exerciseCount ?? 0}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Тренировок за 30 дней</span>
-                  <span className="font-semibold">{dashboardQuery.data?.summary.workoutsLast30Days ?? 0}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">Суммарный объём</span>
-                  <span className="font-semibold">
-                    {(dashboardQuery.data?.summary.totalVolumeKg ?? 0).toLocaleString("ru-RU")}
-                  </span>
-                </div>
+                <div className="flex items-center justify-between"><span className="text-slate-400">Упражнений в системе</span><span className="font-semibold">{dashboardQuery.data?.summary.exerciseCount ?? 0}</span></div>
+                <div className="flex items-center justify-between"><span className="text-slate-400">Тренировок за 30 дней</span><span className="font-semibold">{dashboardQuery.data?.summary.workoutsLast30Days ?? 0}</span></div>
+                <div className="flex items-center justify-between"><span className="text-slate-400">Суммарный объём</span><span className="font-semibold">{(dashboardQuery.data?.summary.totalVolumeKg ?? 0).toLocaleString("ru-RU")}</span></div>
               </CardContent>
             </Card>
           </div>
 
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-px border border-white/10 bg-white/10 xl:grid-cols-4">
-              <div className="bg-[#0b0f14] px-4 py-3">
-                <div className="text-[10px] uppercase tracking-[0.28em] text-slate-500">Месяц</div>
-                <div className="mt-2 text-2xl font-semibold">{grandTotal.toLocaleString("ru-RU")}</div>
-                <div className="mt-1 text-[11px] text-slate-400">общий объём по тренировочным дням</div>
-              </div>
-              <div className="bg-[#0b0f14] px-4 py-3">
-                <div className="text-[10px] uppercase tracking-[0.28em] text-slate-500">Дней с тренировкой</div>
-                <div className="mt-2 text-2xl font-semibold">{workoutDaysCount}</div>
-                <div className="mt-1 text-[11px] text-slate-400">заполненные столбцы текущего месяца</div>
-              </div>
-              <div className="bg-[#0b0f14] px-4 py-3">
-                <div className="text-[10px] uppercase tracking-[0.28em] text-slate-500">Средний день</div>
-                <div className="mt-2 text-2xl font-semibold">{averageDayVolume.toLocaleString("ru-RU")}</div>
-                <div className="mt-1 text-[11px] text-slate-400">средний объём на тренировочный день</div>
-              </div>
-              <div className="bg-[#0b0f14] px-4 py-3">
-                <div className="text-[10px] uppercase tracking-[0.28em] text-slate-500">Пик дня</div>
-                <div className="mt-2 text-2xl font-semibold">{maxDayVolume.toLocaleString("ru-RU")}</div>
-                <div className="mt-1 text-[11px] text-slate-400">максимальный объём за день в месяце</div>
-              </div>
+              <div className="bg-[#0b0f14] px-4 py-3"><div className="text-[10px] uppercase tracking-[0.28em] text-slate-500">Месяц</div><div className="mt-2 text-2xl font-semibold">{grandTotal.toLocaleString("ru-RU")}</div><div className="mt-1 text-[11px] text-slate-400">общий объём по тренировочным дням</div></div>
+              <div className="bg-[#0b0f14] px-4 py-3"><div className="text-[10px] uppercase tracking-[0.28em] text-slate-500">Дней с тренировкой</div><div className="mt-2 text-2xl font-semibold">{workoutDaysCount}</div><div className="mt-1 text-[11px] text-slate-400">заполненные столбцы текущего месяца</div></div>
+              <div className="bg-[#0b0f14] px-4 py-3"><div className="text-[10px] uppercase tracking-[0.28em] text-slate-500">Средний день</div><div className="mt-2 text-2xl font-semibold">{averageDayVolume.toLocaleString("ru-RU")}</div><div className="mt-1 text-[11px] text-slate-400">средний объём на тренировочный день</div></div>
+              <div className="bg-[#0b0f14] px-4 py-3"><div className="text-[10px] uppercase tracking-[0.28em] text-slate-500">Пик дня</div><div className="mt-2 text-2xl font-semibold">{maxDayVolume.toLocaleString("ru-RU")}</div><div className="mt-1 text-[11px] text-slate-400">максимальный объём за день</div></div>
             </div>
 
             <Card className="rounded-none border-white/10 bg-[#090d12] text-slate-100">
-              <CardHeader className="border-b border-white/10 pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Grid2X2 className="h-4 w-4" />
-                  Месячная матрица
-                </CardTitle>
-              </CardHeader>
+              <CardHeader className="border-b border-white/10 pb-3"><CardTitle className="flex items-center gap-2 text-base"><Grid2X2 className="h-4 w-4" />Месячная матрица</CardTitle></CardHeader>
               <CardContent className="space-y-0 overflow-x-auto p-0">
                 <div className="grid grid-cols-[250px_104px_repeat(4,minmax(0,1fr))] gap-px border-b border-white/10 bg-white/10 text-[10px] uppercase tracking-[0.22em] text-slate-500">
-                  <div className="bg-[#0b0f14] px-4 py-2">Порядок</div>
-                  <div className="bg-[#0b0f14] px-3 py-2 text-center">Итого</div>
-                  <div className="bg-[#0b0f14] px-3 py-2 text-center">Трен. дней</div>
-                  <div className="bg-[#0b0f14] px-3 py-2 text-center">Упражнений</div>
-                  <div className="bg-[#0b0f14] px-3 py-2 text-center">Ячеек</div>
-                  <div className="bg-[#0b0f14] px-3 py-2 text-center">Режим</div>
+                  <div className="bg-[#0b0f14] px-4 py-2">Порядок</div><div className="bg-[#0b0f14] px-3 py-2 text-center">Итого</div><div className="bg-[#0b0f14] px-3 py-2 text-center">Трен. дней</div><div className="bg-[#0b0f14] px-3 py-2 text-center">Упражнений</div><div className="bg-[#0b0f14] px-3 py-2 text-center">Ячеек</div><div className="bg-[#0b0f14] px-3 py-2 text-center">Режим</div>
                 </div>
                 <div className="grid grid-cols-[250px_104px_repeat(4,minmax(0,1fr))] gap-px border-b border-white/10 bg-white/10 text-sm">
-                  <div className="bg-[#0b0f14] px-4 py-2 text-slate-300">Месяц {monthHeading}</div>
-                  <div className="bg-[#0b0f14] px-3 py-2 text-center font-semibold">{grandTotal.toLocaleString("ru-RU")}</div>
-                  <div className="bg-[#0b0f14] px-3 py-2 text-center font-semibold">{workoutDaysCount}</div>
-                  <div className="bg-[#0b0f14] px-3 py-2 text-center font-semibold">{exerciseRows.length}</div>
-                  <div className="bg-[#0b0f14] px-3 py-2 text-center font-semibold">
-                    {exerciseRows.reduce((sum, row) => sum + row.activeDays, 0)}
-                  </div>
-                  <div className="bg-[#0b0f14] px-3 py-2 text-center font-semibold">
-                    {compactMode ? "Плотно" : "Свободно"}
-                  </div>
+                  <div className="bg-[#0b0f14] px-4 py-2 text-slate-300">Месяц {monthHeading}</div><div className="bg-[#0b0f14] px-3 py-2 text-center font-semibold">{grandTotal.toLocaleString("ru-RU")}</div><div className="bg-[#0b0f14] px-3 py-2 text-center font-semibold">{workoutDaysCount}</div><div className="bg-[#0b0f14] px-3 py-2 text-center font-semibold">{exerciseRows.length}</div><div className="bg-[#0b0f14] px-3 py-2 text-center font-semibold">{exerciseRows.reduce((sum, row) => sum + row.activeDays, 0)}</div><div className="bg-[#0b0f14] px-3 py-2 text-center font-semibold">{compactMode ? "Плотно" : "Свободно"}</div>
                 </div>
                 <div className="grid grid-cols-[250px_minmax(0,1fr)] gap-px border-b border-white/10 bg-white/10 text-sm">
-                  <div className="bg-[#0b0f14] px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-slate-500">
-                    Пометки месяца
-                  </div>
-                  <div className="bg-[#0b0f14] p-1.5">
-                    <Input
-                      value={monthNote}
-                      onChange={event => setMonthNote(event.target.value)}
-                      placeholder="Например: силовой акцент, восстановительная неделя, работа на объём"
-                      className="h-8 rounded-none border-white/10 bg-white/5 text-sm"
-                    />
-                  </div>
+                  <div className="bg-[#0b0f14] px-4 py-2 text-[10px] uppercase tracking-[0.22em] text-slate-500">Пометки месяца</div>
+                  <div className="bg-[#0b0f14] p-1.5"><Input value={monthNote} onChange={event => setMonthNote(event.target.value)} placeholder="Например: силовой акцент, восстановительная неделя, работа на объём" className="h-8 rounded-none border-white/10 bg-white/5 text-sm" /></div>
                 </div>
-
                 <table className={`${tableMinWidth} border-collapse`}>
                   <thead>
                     <tr>
-                      <th className="sticky left-0 z-30 min-w-[250px] border border-white/10 bg-[#0c1118] px-4 py-1 text-left text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                        Упражнение
-                      </th>
-                      <th className="min-w-[104px] border border-white/10 bg-[#0c1118] px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-                        Итого
-                      </th>
-                      {matrixDays.map(day => (
-                        <th
-                          key={day.date}
-                          className={`min-w-[88px] border border-white/10 px-1 py-0 text-center ${getDayScenarioClass(
-                            day.date,
-                            day.summary?.volume ?? 0,
-                            maxDayVolume
-                          )}`}
-                        >
-                          <div className="border-b border-white/10 py-1">
-                            <div className="text-[11px] font-semibold leading-none text-emerald-400">
-                              {day.summary ? (
-                                formatCellValue(day.summary.volume, "weight_reps")
-                              ) : (
-                                <Minus className="mx-auto h-3 w-3 text-slate-700" />
-                              )}
-                            </div>
-                            <div className="mt-1 text-[9px] text-slate-500">
-                              {day.summary?.startTimeText || ""}
-                              {day.summary?.durationMinutes ? ` • ${day.summary.durationMinutes} мин` : ""}
-                            </div>
-                          </div>
-                          <div className="py-1">
-                            <div className="text-xs font-semibold leading-none text-slate-100">{day.day}</div>
-                            <div className={`mt-1 text-[9px] uppercase tracking-[0.2em] ${getWeekdayTone(day.date)}`}>
-                              {format(new Date(day.date), "EEE", { locale: ru })}
-                            </div>
-                          </div>
-                        </th>
-                      ))}
+                      <th className="sticky left-0 z-30 min-w-[250px] border border-white/10 bg-[#0c1118] px-4 py-1 text-left text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">Упражнение</th>
+                      <th className="min-w-[104px] border border-white/10 bg-[#0c1118] px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-500">Итого</th>
+                      {matrixDays.map(day => <th key={day.date} className={`min-w-[88px] border border-white/10 px-1 py-0 text-center ${getDayScenarioClass(day.date, day.summary?.volume ?? 0, maxDayVolume)}`}><div className="border-b border-white/10 py-1"><div className="text-[11px] font-semibold leading-none text-emerald-400">{day.summary ? formatCellValue(day.summary.volume, "weight_reps") : <Minus className="mx-auto h-3 w-3 text-slate-700" />}</div><div className="mt-1 text-[9px] text-slate-500">{day.summary?.startTimeText || ""}{day.summary?.durationMinutes ? ` • ${day.summary.durationMinutes} мин` : ""}</div></div><div className="py-1"><div className="text-xs font-semibold leading-none text-slate-100">{day.day}</div><div className={`mt-1 text-[9px] uppercase tracking-[0.2em] ${getWeekdayTone(day.date)}`}>{format(new Date(day.date), "EEE", { locale: ru })}</div></div></th>)}
                     </tr>
                   </thead>
                   <tbody>
                     {exerciseRows.map((exercise, index) => {
                       const accent = getExerciseAccent(exercise.volumeMode);
-                      return (
-                        <tr key={exercise.id}>
-                          <td
-                            className={`sticky left-0 z-20 border border-white/10 bg-[#0b0f14] ${rowStickyPadding} align-top before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] ${accent.stripe} relative`}
-                          >
-                            <div className="flex items-start justify-between gap-3 pl-1">
-                              <div className="flex items-start gap-2">
-                                <div className="mt-0.5 flex flex-col border border-white/10 bg-white/5">
-                                  <button
-                                    type="button"
-                                    className="px-1 py-1 text-slate-400 transition hover:bg-white/10 hover:text-slate-100 disabled:opacity-30"
-                                    onClick={() => moveExercise(exercise.id, "up")}
-                                    disabled={index === 0}
-                                    aria-label={`Поднять ${exercise.name}`}
-                                  >
-                                    <ArrowUp className="h-3 w-3" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="border-t border-white/10 px-1 py-1 text-slate-400 transition hover:bg-white/10 hover:text-slate-100 disabled:opacity-30"
-                                    onClick={() => moveExercise(exercise.id, "down")}
-                                    disabled={index === exerciseRows.length - 1}
-                                    aria-label={`Опустить ${exercise.name}`}
-                                  >
-                                    <ArrowDown className="h-3 w-3" />
-                                  </button>
-                                </div>
-                                <div>
-                                  <div className="font-medium leading-tight text-slate-100">{exercise.name}</div>
-                                  <div className="mt-1 text-[11px] text-slate-500">
-                                    {exercise.primaryMuscleGroup || exercise.category || volumeModeLabels[exercise.volumeMode]}
-                                  </div>
-                                </div>
+                      return <tr key={exercise.id}>
+                        <td className={`sticky left-0 z-20 border border-white/10 bg-[#0b0f14] ${rowStickyPadding} align-top before:absolute before:left-0 before:top-0 before:h-full before:w-[3px] ${accent.stripe} relative`}>
+                          <div className="flex items-start justify-between gap-3 pl-1">
+                            <div className="flex items-start gap-2">
+                              <div className="mt-0.5 flex flex-col border border-white/10 bg-white/5">
+                                <button type="button" className="px-1 py-1 text-slate-400 transition hover:bg-white/10 hover:text-slate-100 disabled:opacity-30" onClick={() => moveExercise(exercise.id, "up")} disabled={index === 0}><ArrowUp className="h-3 w-3" /></button>
+                                <button type="button" className="border-t border-white/10 px-1 py-1 text-slate-400 transition hover:bg-white/10 hover:text-slate-100 disabled:opacity-30" onClick={() => moveExercise(exercise.id, "down")} disabled={index === exerciseRows.length - 1}><ArrowDown className="h-3 w-3" /></button>
                               </div>
-                              <div className={`rounded-none border px-2 py-1 text-[9px] font-medium uppercase tracking-wide ${accent.pill}`}>
-                                {exercise.activeDays} дн.
-                              </div>
+                              <div><div className="font-medium leading-tight text-slate-100">{exercise.name}</div><div className="mt-1 text-[11px] text-slate-500">{exercise.primaryMuscleGroup || exercise.category || volumeModeLabels[exercise.volumeMode]}</div></div>
                             </div>
-                          </td>
-                          <td className="border border-white/10 bg-[#10161d] px-2 py-2 text-center align-middle">
-                            <div className="text-sm font-semibold">{formatCellValue(exercise.total, exercise.volumeMode)}</div>
-                            <div className="mt-1 text-[9px] uppercase tracking-[0.2em] text-slate-500">
-                              {getCellHint(exercise.volumeMode)}
-                            </div>
-                          </td>
-                          {matrixDays.map(day => {
-                            const cell = exercise.cells[day.date];
-                            const hasValue = Boolean(cell);
-                            const cellVolume = cell?.volume ?? 0;
-                            const cellSetsCount = cell?.setsCount ?? 0;
-                            const previewLines = getPreviewLines(cell?.rawInput);
-
-                            return (
-                              <td key={day.date} className="border border-white/10 p-0">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setSelectedCell({
-                                      date: day.date,
-                                      exerciseId: exercise.id,
-                                      exerciseName: exercise.name,
-                                      volumeMode: exercise.volumeMode,
-                                    })
-                                  }
-                                  className={`flex w-full flex-col items-center justify-center ${rowCellHeight} ${cellPadding} text-center transition-colors ${
-                                    hasValue ? `${accent.cell} text-slate-100` : "bg-[#0a0f15] hover:bg-[#111923]"
-                                  }`}
-                                >
-                                  <div className="text-[11px] font-semibold leading-none">
-                                    {hasValue ? formatCellValue(cellVolume, exercise.volumeMode) : ""}
-                                  </div>
-                                  <div className="mt-1 text-[8px] uppercase tracking-[0.18em] text-slate-500">
-                                    {hasValue ? `${cellSetsCount} сет.` : "+"}
-                                  </div>
-                                  <div className={`mt-1 flex ${previewHeight} w-full flex-col items-center justify-start gap-0.5 text-[9px] leading-tight text-slate-400`}>
-                                    {previewLines.map(line => (
-                                      <div key={line} className="max-w-full truncate">
-                                        {line}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </button>
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      );
-                    })}
-                    <tr>
-                      <td className="sticky left-0 z-20 border border-white/10 bg-[#0c1118] px-4 py-2 font-semibold text-slate-100">
-                        Итог по дням
-                      </td>
-                      <td className="border border-white/10 bg-[#121921] px-2 py-2 text-center text-sm font-semibold">
-                        {grandTotal.toLocaleString("ru-RU")}
-                      </td>
-                      {matrixDays.map(day => (
-                        <td key={day.date} className="border border-white/10 bg-[#0f151c] px-1 py-2 text-center">
-                          <div className="text-xs font-semibold text-slate-100">
-                            {day.summary ? day.summary.volume.toLocaleString("ru-RU") : ""}
-                          </div>
-                          <div className="mt-1 text-[8px] uppercase tracking-[0.18em] text-slate-500">
-                            {day.summary ? "день" : ""}
+                            <div className={`rounded-none border px-2 py-1 text-[9px] font-medium uppercase tracking-wide ${accent.pill}`}>{exercise.activeDays} дн.</div>
                           </div>
                         </td>
-                      ))}
-                    </tr>
+                        <td className="border border-white/10 bg-[#10161d] px-2 py-2 text-center align-middle"><div className="text-sm font-semibold">{formatCellValue(exercise.total, exercise.volumeMode)}</div><div className="mt-1 text-[9px] uppercase tracking-[0.2em] text-slate-500">{getCellHint(exercise.volumeMode)}</div></td>
+                        {matrixDays.map(day => {
+                          const cell = exercise.cells[day.date];
+                          const hasValue = Boolean(cell);
+                          const previewLines = getPreviewLines(cell?.rawInput);
+                          return <td key={day.date} className="border border-white/10 p-0"><button type="button" onClick={() => setSelectedCell({ date: day.date, exerciseId: exercise.id, exerciseName: exercise.name, volumeMode: exercise.volumeMode })} className={`flex w-full flex-col items-center justify-center ${rowCellHeight} ${cellPadding} text-center transition-colors ${hasValue ? `${accent.cell} text-slate-100` : "bg-[#0a0f15] hover:bg-[#111923]"}`}><div className="text-[11px] font-semibold leading-none">{hasValue ? formatCellValue(cell?.volume ?? 0, exercise.volumeMode) : ""}</div><div className="mt-1 text-[8px] uppercase tracking-[0.18em] text-slate-500">{hasValue ? `${cell?.setsCount ?? 0} сет.` : "+"}</div><div className={`mt-1 flex ${previewHeight} w-full flex-col items-center justify-start gap-0.5 text-[9px] leading-tight text-slate-400`}>{previewLines.map(line => <div key={line} className="max-w-full truncate">{line}</div>)}</div></button></td>;
+                        })}
+                      </tr>;
+                    })}
+                    <tr><td className="sticky left-0 z-20 border border-white/10 bg-[#0c1118] px-4 py-2 font-semibold text-slate-100">Итог по дням</td><td className="border border-white/10 bg-[#121921] px-2 py-2 text-center text-sm font-semibold">{grandTotal.toLocaleString("ru-RU")}</td>{matrixDays.map(day => <td key={day.date} className="border border-white/10 bg-[#0f151c] px-1 py-2 text-center"><div className="text-xs font-semibold text-slate-100">{day.summary ? day.summary.volume.toLocaleString("ru-RU") : ""}</div><div className="mt-1 text-[8px] uppercase tracking-[0.18em] text-slate-500">{day.summary ? "день" : ""}</div></td>)}</tr>
                   </tbody>
                 </table>
               </CardContent>
             </Card>
 
             <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-              <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
-                <CardHeader className="border-b border-white/10 pb-3">
-                  <CardTitle className="text-base">Прогресс и рекорды</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 pt-4">
-                  {(dashboardQuery.data?.progressHighlights ?? []).slice(0, 6).map(item => (
-                    <div
-                      key={item.exerciseId}
-                      className="grid grid-cols-[minmax(0,1fr)_120px_120px] items-center gap-3 border border-white/10 bg-white/5 px-3 py-2"
-                    >
-                      <div className="min-w-0">
-                        <div className="truncate font-medium text-slate-100">{item.exerciseName}</div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          {item.primaryMuscleGroup || "Без группы"} • {item.sessions} сесс.
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm font-semibold">{item.currentEstimatedOneRepMax.toLocaleString("ru-RU")}</div>
-                        <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">e1RM</div>
-                      </div>
-                      <div className="text-right">
-                        <div className={`text-sm font-semibold ${item.deltaEstimatedOneRepMax >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                          {item.deltaEstimatedOneRepMax >= 0 ? "+" : ""}
-                          {item.deltaEstimatedOneRepMax.toLocaleString("ru-RU")}
-                        </div>
-                        <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">дельта</div>
-                      </div>
-                    </div>
-                  ))}
-                  {!dashboardQuery.data?.progressHighlights?.length && (
-                    <div className="border border-dashed border-white/10 px-4 py-6 text-sm text-slate-500">
-                      Аналитика появится после нескольких тренировок с рабочими подходами.
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
-                <CardHeader className="border-b border-white/10 pb-3">
-                  <CardTitle className="text-base">Структура нагрузки</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 pt-4">
-                  {(dashboardQuery.data?.muscleGroupDistribution ?? []).slice(0, 8).map(item => {
-                    const totalSets = (dashboardQuery.data?.muscleGroupDistribution ?? []).reduce((sum, row) => sum + row.sets, 0);
-                    const share = totalSets ? Math.round((item.sets / totalSets) * 100) : 0;
-                    return (
-                      <div key={item.name} className="space-y-1">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="truncate text-slate-200">{item.name}</span>
-                          <span className="text-slate-500">{item.sets} сет.</span>
-                        </div>
-                        <div className="h-2 bg-white/5">
-                          <div className="h-full bg-cyan-400/80" style={{ width: `${share}%` }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <div className="border-t border-white/10 pt-3">
-                    <div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">Последние тренировки</div>
-                    <div className="space-y-2">
-                      {(dashboardQuery.data?.recentSessions ?? []).slice(0, 5).map(session => (
-                        <div key={session.id} className="flex items-center justify-between border border-white/10 bg-white/5 px-3 py-2 text-sm">
-                          <div className="min-w-0">
-                            <div className="truncate text-slate-100">{session.title}</div>
-                            <div className="text-xs text-slate-500">
-                              {format(new Date(session.performedAt), "d MMM yyyy", { locale: ru })}
-                            </div>
-                          </div>
-                          <div className="text-right text-xs text-slate-400">
-                            {session.durationMinutes ? `${session.durationMinutes} мин` : "без длит."}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100"><CardHeader className="border-b border-white/10 pb-3"><CardTitle className="text-base">Прогресс и рекорды</CardTitle></CardHeader><CardContent className="space-y-3 pt-4">{(dashboardQuery.data?.progressHighlights ?? []).slice(0, 6).map(item => <div key={item.exerciseId} className="grid grid-cols-[minmax(0,1fr)_120px_120px] items-center gap-3 border border-white/10 bg-white/5 px-3 py-2"><div className="min-w-0"><div className="truncate font-medium text-slate-100">{item.exerciseName}</div><div className="mt-1 text-xs text-slate-500">{item.primaryMuscleGroup || "Без группы"} • {item.sessions} сесс.</div></div><div className="text-right"><div className="text-sm font-semibold">{item.currentEstimatedOneRepMax.toLocaleString("ru-RU")}</div><div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">e1RM</div></div><div className="text-right"><div className={`text-sm font-semibold ${item.deltaEstimatedOneRepMax >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{item.deltaEstimatedOneRepMax >= 0 ? "+" : ""}{item.deltaEstimatedOneRepMax.toLocaleString("ru-RU")}</div><div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">дельта</div></div></div>)}{!dashboardQuery.data?.progressHighlights?.length && <div className="border border-dashed border-white/10 px-4 py-6 text-sm text-slate-500">Аналитика появится после нескольких тренировок с рабочими подходами.</div>}</CardContent></Card>
+              <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100"><CardHeader className="border-b border-white/10 pb-3"><CardTitle className="text-base">Структура нагрузки</CardTitle></CardHeader><CardContent className="space-y-3 pt-4">{(dashboardQuery.data?.muscleGroupDistribution ?? []).slice(0, 8).map(item => { const totalSets = (dashboardQuery.data?.muscleGroupDistribution ?? []).reduce((sum, row) => sum + row.sets, 0); const share = totalSets ? Math.round((item.sets / totalSets) * 100) : 0; return <div key={item.name} className="space-y-1"><div className="flex items-center justify-between text-sm"><span className="truncate text-slate-200">{item.name}</span><span className="text-slate-500">{item.sets} сет.</span></div><div className="h-2 bg-white/5"><div className="h-full bg-cyan-400/80" style={{ width: `${share}%` }} /></div></div>; })}<div className="border-t border-white/10 pt-3"><div className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">Последние тренировки</div><div className="space-y-2">{(dashboardQuery.data?.recentSessions ?? []).slice(0, 5).map(session => <div key={session.id} className="flex items-center justify-between border border-white/10 bg-white/5 px-3 py-2 text-sm"><div className="min-w-0"><div className="truncate text-slate-100">{session.title}</div><div className="text-xs text-slate-500">{format(new Date(session.performedAt), "d MMM yyyy", { locale: ru })}</div></div><div className="text-right text-xs text-slate-400">{session.durationMinutes ? `${session.durationMinutes} мин` : "без длит."}</div></div>)}</div></div></CardContent></Card>
             </div>
           </div>
         </div>
@@ -1055,211 +658,31 @@ export default function TrainingPage() {
 
       <Dialog open={Boolean(selectedCell)} onOpenChange={open => !open && setSelectedCell(null)}>
         <DialogContent className="max-w-3xl border-white/10 bg-[#0b0f14] text-slate-100">
-          <DialogHeader>
-            <DialogTitle>
-              {selectedCell?.exerciseName} •{" "}
-              {selectedCell ? format(new Date(selectedCell.date), "d MMMM yyyy", { locale: ru }) : ""}
-            </DialogTitle>
-          </DialogHeader>
-
+          <DialogHeader><DialogTitle>{selectedCell?.exerciseName} • {selectedCell ? format(new Date(selectedCell.date), "d MMMM yyyy", { locale: ru }) : ""}</DialogTitle></DialogHeader>
           <div className="grid gap-3 md:grid-cols-3">
-            <Input
-              placeholder="Название тренировки"
-              className="rounded-none border-white/10 bg-white/5"
-              value={editorForm.sessionTitle}
-              onChange={event => setEditorForm(current => ({ ...current, sessionTitle: event.target.value }))}
-            />
-            <Input
-              placeholder="Время начала"
-              className="rounded-none border-white/10 bg-white/5"
-              value={editorForm.startTimeText}
-              onChange={event => setEditorForm(current => ({ ...current, startTimeText: event.target.value }))}
-            />
-            <Input
-              type="number"
-              placeholder="Длительность, мин"
-              className="rounded-none border-white/10 bg-white/5"
-              value={editorForm.durationMinutes}
-              onChange={event => setEditorForm(current => ({ ...current, durationMinutes: event.target.value }))}
-            />
+            <Input placeholder="Название тренировки" className="rounded-none border-white/10 bg-white/5" value={editorForm.sessionTitle} onChange={event => setEditorForm(current => ({ ...current, sessionTitle: event.target.value }))} />
+            <Input placeholder="Время начала" className="rounded-none border-white/10 bg-white/5" value={editorForm.startTimeText} onChange={event => setEditorForm(current => ({ ...current, startTimeText: event.target.value }))} />
+            <Input type="number" placeholder="Длительность, мин" className="rounded-none border-white/10 bg-white/5" value={editorForm.durationMinutes} onChange={event => setEditorForm(current => ({ ...current, durationMinutes: event.target.value }))} />
           </div>
-
-          <Textarea
-            placeholder={`Быстрый ввод. Например:\n55кг 20\n55кг 17 16 13\n20кг 30*4\n80кг 12, 10, 8\n12. 14. 16. 13. 11`}
-            value={editorForm.rawInput}
-            onChange={event => setEditorForm(current => ({ ...current, rawInput: event.target.value }))}
-            className="min-h-[220px] rounded-none border-white/10 bg-white/5 font-mono text-sm"
-          />
-
-          <div className="border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-400">
-            <div className="font-medium text-slate-100">Как считаем</div>
-            <div className="mt-1">Режим объёма: {selectedCell ? volumeModeLabels[selectedCell.volumeMode] : ""}</div>
-            <div className="mt-1">
-              В ячейке будет показан {selectedCell ? getCellHint(selectedCell.volumeMode) : "итог"} по этому
-              упражнению за день.
-            </div>
-          </div>
-
-          <Textarea
-            placeholder="Комментарий к упражнению в этой тренировке"
-            className="rounded-none border-white/10 bg-white/5"
-            value={editorForm.notes}
-            onChange={event => setEditorForm(current => ({ ...current, notes: event.target.value }))}
-          />
-
-          <Textarea
-            placeholder="Заметка ко всей тренировке"
-            className="rounded-none border-white/10 bg-white/5"
-            value={editorForm.sessionNotes}
-            onChange={event => setEditorForm(current => ({ ...current, sessionNotes: event.target.value }))}
-          />
-
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              className="rounded-none border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
-              onClick={() => setEditorForm(current => ({ ...current, rawInput: "" }))}
-            >
-              Очистить ввод
-            </Button>
-            <Button className="rounded-none" onClick={handleSaveCell} disabled={upsertCell.isPending}>
-              Сохранить ячейку
-            </Button>
-          </DialogFooter>
+          <Textarea placeholder={`Быстрый ввод. Например:\n55кг 20\n55кг 17 16 13\n20кг 30*4\n80кг 12, 10, 8\n12. 14. 16. 13. 11`} value={editorForm.rawInput} onChange={event => setEditorForm(current => ({ ...current, rawInput: event.target.value }))} className="min-h-[220px] rounded-none border-white/10 bg-white/5 font-mono text-sm" />
+          <div className="border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-400"><div className="font-medium text-slate-100">Как считаем</div><div className="mt-1">Режим объёма: {selectedCell ? volumeModeLabels[selectedCell.volumeMode] : ""}</div><div className="mt-1">В ячейке будет показан {selectedCell ? getCellHint(selectedCell.volumeMode) : "итог"} по этому упражнению за день.</div></div>
+          <Textarea placeholder="Комментарий к упражнению в этой тренировке" className="rounded-none border-white/10 bg-white/5" value={editorForm.notes} onChange={event => setEditorForm(current => ({ ...current, notes: event.target.value }))} />
+          <Textarea placeholder="Заметка ко всей тренировке" className="rounded-none border-white/10 bg-white/5" value={editorForm.sessionNotes} onChange={event => setEditorForm(current => ({ ...current, sessionNotes: event.target.value }))} />
+          <DialogFooter className="gap-2"><Button variant="outline" className="rounded-none border-white/10 bg-white/5 text-slate-100 hover:bg-white/10" onClick={() => setEditorForm(current => ({ ...current, rawInput: "" }))}>Очистить ввод</Button><Button className="rounded-none" onClick={handleSaveCell} disabled={upsertCell.isPending}>Сохранить ячейку</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={importOpen} onOpenChange={setImportOpen}>
         <DialogContent className="max-w-4xl border-white/10 bg-[#0b0f14] text-slate-100">
-          <DialogHeader>
-            <DialogTitle>Импорт старых HTML-записей</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-3 text-sm text-slate-400">
-            <p>
-              Вставьте HTML или сырой фрагмент старой таблицы. Я разберу даты из шапки, строки упражнений и
-              непустые ячейки с подходами.
-            </p>
-            <p>
-              Если упражнение ещё не существует, оно будет создано автоматически. Для новых упражнений импорт
-              по умолчанию использует режим `Вес × повторения`.
-            </p>
-          </div>
-
-          <Textarea
-            value={importText}
-            onChange={event => setImportText(event.target.value)}
-            placeholder="<table>...</table>"
-            className="min-h-[260px] rounded-none border-white/10 bg-white/5 font-mono text-xs"
-          />
-
-          <div className="grid gap-3 md:grid-cols-3">
-            <div className="border border-white/10 bg-white/5 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Ячеек</div>
-              <div className="mt-1 text-xl font-semibold text-slate-100">{selectedImportKeys.length}</div>
-            </div>
-            <div className="border border-white/10 bg-white/5 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Упражнений</div>
-              <div className="mt-1 text-xl font-semibold text-slate-100">{importPreviewExercises.length}</div>
-            </div>
-            <div className="border border-white/10 bg-white/5 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Дней</div>
-              <div className="mt-1 text-xl font-semibold text-slate-100">{importPreviewDays.length}</div>
-            </div>
-          </div>
-
+          <DialogHeader><DialogTitle>Импорт старых HTML-записей</DialogTitle></DialogHeader>
+          <div className="space-y-3 text-sm text-slate-400"><p>Вставьте HTML или сырой фрагмент старой таблицы. Система разберёт даты, упражнения и непустые ячейки.</p><p>Если упражнение ещё не существует, оно будет создано автоматически. Для новых упражнений импорт использует режим `Вес × повторения`.</p></div>
+          <Textarea value={importText} onChange={event => setImportText(event.target.value)} placeholder="<table>...</table>" className="min-h-[260px] rounded-none border-white/10 bg-white/5 font-mono text-xs" />
+          <div className="grid gap-3 md:grid-cols-3"><div className="border border-white/10 bg-white/5 px-3 py-2"><div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Ячеек</div><div className="mt-1 text-xl font-semibold text-slate-100">{selectedImportKeys.length}</div></div><div className="border border-white/10 bg-white/5 px-3 py-2"><div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Упражнений</div><div className="mt-1 text-xl font-semibold text-slate-100">{importPreviewExercises.length}</div></div><div className="border border-white/10 bg-white/5 px-3 py-2"><div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Дней</div><div className="mt-1 text-xl font-semibold text-slate-100">{importPreviewDays.length}</div></div></div>
           <div className="grid gap-3 md:grid-cols-[0.95fr_1.05fr]">
-            <div className="border border-white/10 bg-white/5">
-              <div className="border-b border-white/10 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">
-                Найденные упражнения
-              </div>
-              <div className="max-h-48 overflow-auto px-3 py-2 text-sm">
-                {importPreviewExercises.length ? (
-                  <div className="space-y-1">
-                    {importPreviewExercises.slice(0, 20).map(name => (
-                      <div key={name} className="truncate text-slate-200">
-                        {name}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-slate-500">Пока нечего импортировать</div>
-                )}
-              </div>
-            </div>
-            <div className="border border-white/10 bg-white/5">
-              <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
-                <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Подтверждение ячеек</div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    className="text-[10px] uppercase tracking-[0.18em] text-slate-400 hover:text-slate-100"
-                    onClick={() => setSelectedImportKeys(importPreview.map(item => item.key))}
-                  >
-                    Все
-                  </button>
-                  <button
-                    type="button"
-                    className="text-[10px] uppercase tracking-[0.18em] text-slate-400 hover:text-slate-100"
-                    onClick={() => setSelectedImportKeys([])}
-                  >
-                    Снять
-                  </button>
-                </div>
-              </div>
-              <div className="max-h-48 overflow-auto px-3 py-2 text-sm">
-                {importPreview.length ? (
-                  <div className="space-y-2">
-                    {importPreview.slice(0, 12).map((item, index) => (
-                      <label
-                        key={`${item.exerciseName}-${item.date}-${index}`}
-                        className="flex cursor-pointer gap-2 border border-white/10 px-2 py-2"
-                      >
-                        <input
-                          type="checkbox"
-                          className="mt-0.5"
-                          checked={selectedImportKeys.includes(item.key)}
-                          onChange={event =>
-                            setSelectedImportKeys(current =>
-                              event.target.checked
-                                ? [...current, item.key]
-                                : current.filter(key => key !== item.key)
-                            )
-                          }
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="truncate font-medium text-slate-100">{item.exerciseName}</span>
-                            <span className="text-xs text-slate-500">{item.date}</span>
-                          </div>
-                          <div className="mt-1 line-clamp-2 text-xs text-slate-400">{item.rawInput}</div>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-slate-500">Вставьте HTML, чтобы увидеть разбор до импорта</div>
-                )}
-              </div>
-            </div>
+            <div className="border border-white/10 bg-white/5"><div className="border-b border-white/10 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">Найденные упражнения</div><div className="max-h-48 overflow-auto px-3 py-2 text-sm">{importPreviewExercises.length ? <div className="space-y-1">{importPreviewExercises.slice(0, 20).map(name => <div key={name} className="truncate text-slate-200">{name}</div>)}</div> : <div className="text-slate-500">Пока нечего импортировать</div>}</div></div>
+            <div className="border border-white/10 bg-white/5"><div className="flex items-center justify-between border-b border-white/10 px-3 py-2"><div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Подтверждение ячеек</div><div className="flex gap-2"><button type="button" className="text-[10px] uppercase tracking-[0.18em] text-slate-400 hover:text-slate-100" onClick={() => setSelectedImportKeys(importPreview.map(item => item.key))}>Все</button><button type="button" className="text-[10px] uppercase tracking-[0.18em] text-slate-400 hover:text-slate-100" onClick={() => setSelectedImportKeys([])}>Снять</button></div></div><div className="max-h-48 overflow-auto px-3 py-2 text-sm">{importPreview.length ? <div className="space-y-2">{importPreview.slice(0, 12).map((item, index) => <label key={`${item.exerciseName}-${item.date}-${index}`} className="flex cursor-pointer gap-2 border border-white/10 px-2 py-2"><input type="checkbox" className="mt-0.5" checked={selectedImportKeys.includes(item.key)} onChange={event => setSelectedImportKeys(current => event.target.checked ? [...current, item.key] : current.filter(key => key !== item.key))} /><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2"><span className="truncate font-medium text-slate-100">{item.exerciseName}</span><span className="text-xs text-slate-500">{item.date}</span></div><div className="mt-1 line-clamp-2 text-xs text-slate-400">{item.rawInput}</div></div></label>)}</div> : <div className="text-slate-500">Вставьте HTML, чтобы увидеть разбор до импорта</div>}</div></div>
           </div>
-
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              className="rounded-none border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
-              onClick={() => setImportText("")}
-            >
-              Очистить
-            </Button>
-            <Button
-              className="rounded-none"
-              onClick={handleImportLegacyHtml}
-              disabled={!importText.trim() || createExercise.isPending || upsertCell.isPending}
-            >
-              Импортировать в месяц
-            </Button>
-          </DialogFooter>
+          <DialogFooter className="gap-2"><Button variant="outline" className="rounded-none border-white/10 bg-white/5 text-slate-100 hover:bg-white/10" onClick={() => setImportText("")}>Очистить</Button><Button className="rounded-none" onClick={handleImportLegacyHtml} disabled={!importText.trim() || createExercise.isPending || upsertCell.isPending}>Импортировать в месяц</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

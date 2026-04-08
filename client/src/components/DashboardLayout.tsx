@@ -37,9 +37,9 @@ import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 
 const hronosMenuItems = [
-  { icon: Clock, label: "РЈС‡С‘С‚ РІСЂРµРјРµРЅРё", path: "/" },
-  { icon: BarChart2, label: "РђРЅР°Р»РёС‚РёРєР°", path: "/analytics" },
-  { icon: Tag, label: "РљР°С‚РµРіРѕСЂРёРё С‚РµРіРѕРІ", path: "/tags" },
+  { icon: Clock, label: "Учёт времени", path: "/" },
+  { icon: BarChart2, label: "Аналитика", path: "/analytics" },
+  { icon: Tag, label: "Категории тегов", path: "/tags" },
 ];
 
 const topLevelItems = [
@@ -95,11 +95,10 @@ export default function DashboardLayout({
         <div className="flex w-full max-w-md flex-col items-center gap-8 p-8">
           <div className="flex flex-col items-center gap-6">
             <h1 className="text-center text-2xl font-semibold tracking-tight">
-              Р’РѕР№РґРёС‚Рµ, С‡С‚РѕР±С‹ РїСЂРѕРґРѕР»Р¶РёС‚СЊ
+              Войдите, чтобы продолжить
             </h1>
             <p className="max-w-sm text-center text-sm text-muted-foreground">
-              Р”Р»СЏ РґРѕСЃС‚СѓРїР° Рє РїР°РЅРµР»Рё РЅСѓР¶РЅР° Р°РІС‚РѕСЂРёР·Р°С†РёСЏ. РџСЂРѕРґРѕР»Р¶РёС‚Рµ РІС…РѕРґ С‡РµСЂРµР·
-              Google.
+              Для доступа к панели нужна авторизация. Продолжите вход через Google.
             </p>
           </div>
           <Button
@@ -109,7 +108,7 @@ export default function DashboardLayout({
             size="lg"
             className="w-full shadow-lg transition-all hover:shadow-xl"
           >
-            Р’РѕР№С‚Рё
+            Войти
           </Button>
         </div>
       </div>
@@ -253,7 +252,7 @@ function DashboardLayoutContent({
                   className="cursor-pointer text-destructive focus:text-destructive"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
-                  <span>Р’С‹Р№С‚Рё</span>
+                  <span>Выйти</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
