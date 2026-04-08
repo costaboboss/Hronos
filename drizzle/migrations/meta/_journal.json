@@ -22,6 +22,20 @@
       "when": 1775569200000,
       "tag": "0002_tardis_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1775636400000,
+      "tag": "0003_training_module",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1775640000000,
+      "tag": "0004_training_matrix",
+      "breakpoints": true
     }
   ]
 }
