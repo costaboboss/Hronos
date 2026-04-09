@@ -2153,6 +2153,11 @@ export default function TrackingPage() {
                 <span className="tabular-nums text-foreground/80">
                   {TIME_SLOTS[menuCell.slotIdx].start.replace(":", ".").replace(/^0/, "")}
                 </span>
+              ) : selection ? (
+                <span className="tabular-nums text-foreground/80">
+                  {TIME_SLOTS[selection.start].start.replace(":", ".").replace(/^0/, "")}-
+                  {TIME_SLOTS[selection.end].end.replace(":", ".").replace(/^0/, "")}
+                </span>
               ) : null}
             </div>
             <div className="space-y-0.5 max-h-64 overflow-y-auto">
