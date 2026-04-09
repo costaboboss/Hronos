@@ -5,6 +5,7 @@ import type {
   TrainingVolumeMode,
 } from "@shared/training";
 import { addMonths, format, startOfMonth } from "date-fns";
+import { ru } from "date-fns/locale";
 import {
   createExercise,
   createSessionExerciseWithSets,
@@ -462,6 +463,27 @@ export async function getUserTrainingMatrix(userId: number, year: number, month:
         ),
       })),
   };
+}
+
+export async function getUserTrainingYearOverview(userId: number, year: number) {
+  const yearStart = new Date(year, 0, 1);
+  const yearEnd = new Date(year + 1, 0, 1);
+  const sessions = await getSessionsByDateRange(userId, yearStart, yearEnd);
+
+  return Array.from({ length: 12 }, (_, index) => {
+    const monthSessions = sessions.filter(session => session.performedAt.getFullYear() === year && session.performedAt.getMonth() === index);
+    const totalVolume = monthSessions.reduce(
+      (sum, session) => sum + session.exercises.reduce((sessionSum, exercise) => sessionSum + (exercise.computedVolume ?? 0), 0),
+      0
+    );
+
+    return {
+      month: index + 1,
+      monthLabel: format(new Date(year, index, 1), "LLLL", { locale: ru }),
+      workoutCount: monthSessions.length,
+      totalVolume,
+    };
+  });
 }
 
 export async function getUserSessionDetailsByDate(userId: number, date: string) {

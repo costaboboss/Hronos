@@ -6,6 +6,7 @@ import {
   trainingListSessionsInputSchema,
   trainingMonthInputSchema,
   trainingSessionDetailsInputSchema,
+  trainingYearInputSchema,
 } from "@shared/training";
 import { protectedProcedure, router } from "../_core/trpc";
 import {
@@ -15,6 +16,7 @@ import {
   getUserSessionDetailsByDate,
   getUserTrainingDashboard,
   getUserTrainingMatrix,
+  getUserTrainingYearOverview,
   listUserExercises,
   listUserRecentSessions,
   upsertUserTrainingCell,
@@ -52,4 +54,8 @@ export const trainingRouter = router({
     .mutation(({ ctx, input }) => upsertUserTrainingCell(ctx.user.id, input)),
 
   dashboard: protectedProcedure.query(({ ctx }) => getUserTrainingDashboard(ctx.user.id)),
+
+  yearOverview: protectedProcedure
+    .input(trainingYearInputSchema)
+    .query(({ ctx, input }) => getUserTrainingYearOverview(ctx.user.id, input.year)),
 });
