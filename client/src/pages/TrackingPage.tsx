@@ -280,9 +280,14 @@ export default function TrackingPage() {
   // Load last 7 days for efficiency stats (always relative to today)
   // Use useMemo so dates are stable references (won't cause infinite re-renders)
   const last7Start = useMemo(() => format(subDays(new Date(), 6), "yyyy-MM-dd"), []);
+  const last28Start = useMemo(() => format(subDays(new Date(), 27), "yyyy-MM-dd"), []);
   const currentWeekMonStr = useMemo(() => format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd"), []);
   const { data: last7Entries = [] } = trpc.entries.getByRange.useQuery(
     { startDate: last7Start, endDate: todayStr },
+    { enabled: !!user }
+  );
+  const { data: last28Entries = [] } = trpc.entries.getByRange.useQuery(
+    { startDate: last28Start, endDate: todayStr },
     { enabled: !!user }
   );
   // Separate query for current week (MonвЂ“today), which may extend beyond last 7 days
@@ -1209,6 +1214,37 @@ export default function TrackingPage() {
     ? Math.round(efficiencyLast7.reduce((s, d) => s + d.pct, 0) / efficiencyLast7.length)
     : 0;
 
+  const rollingAverages = useMemo(() => {
+    const workTagIds = new Set((tagList as TagItem[]).filter(t => t.isWork).map(t => t.id));
+    const workTagNames = new Set((tagList as TagItem[]).filter(t => t.isWork).map(t => t.name.toLowerCase()));
+    const dayCounts: Record<string, number> = {};
+
+    for (const e of last28Entries) {
+      const isWork =
+        (e.tagId && workTagIds.has(e.tagId)) ||
+        (e.tagName && workTagNames.has(e.tagName.toLowerCase()));
+      if (!isWork) continue;
+      dayCounts[e.entryDate] = (dayCounts[e.entryDate] ?? 0) + 1;
+    }
+
+    const getAverageForDays = (daysCount: number) => {
+      let sum = 0;
+      for (let i = daysCount - 1; i >= 0; i--) {
+        const dateStr = format(subDays(new Date(), i), "yyyy-MM-dd");
+        const blocks = dayCounts[dateStr] ?? 0;
+        sum += blocksToPercent(blocks, workNormBlocks);
+      }
+      return Math.round(sum / daysCount);
+    };
+
+    return {
+      days7: getAverageForDays(7),
+      days14: getAverageForDays(14),
+      days21: getAverageForDays(21),
+      days28: getAverageForDays(28),
+    };
+  }, [last28Entries, tagList, workNormBlocks]);
+
   // Average efficiency: current week (Mon-today) uses dedicated thisWeekEntries query
   const efficiencyThisWeek = useMemo(() => {
     const workTagIds = new Set((tagList as TagItem[]).filter(t => t.isWork).map(t => t.id));
@@ -2029,8 +2065,26 @@ export default function TrackingPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-white">Ср. за 7 дней</span>
-                  <span className={`text-xs font-semibold ${getEfficiencyTextClass(selectedWeekAvg)}`}>
-                    {selectedWeekAvg}%
+                  <span className={`text-xs font-semibold ${getEfficiencyTextClass(rollingAverages.days7)}`}>
+                    {rollingAverages.days7}%
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-white">Ср. за 14 дней</span>
+                  <span className={`text-xs font-semibold ${getEfficiencyTextClass(rollingAverages.days14)}`}>
+                    {rollingAverages.days14}%
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-white">Ср. за 21 день</span>
+                  <span className={`text-xs font-semibold ${getEfficiencyTextClass(rollingAverages.days21)}`}>
+                    {rollingAverages.days21}%
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-white">Ср. за 28 дней</span>
+                  <span className={`text-xs font-semibold ${getEfficiencyTextClass(rollingAverages.days28)}`}>
+                    {rollingAverages.days28}%
                   </span>
                 </div>
               </div>
