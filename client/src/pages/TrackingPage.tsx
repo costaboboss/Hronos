@@ -2141,8 +2141,19 @@ export default function TrackingPage() {
                 </button>
               );
             })()}
-            <div className="text-[10px] text-muted-foreground font-medium px-2 pb-1.5 border-b border-border mb-1">
-              {menuCell ? "Сменить тег" : selection ? `Выбрано ${(selection.end - selection.start + 1) * (selection.endDay - selection.startDay + 1)} блоков` : "Выбор тега"}
+            <div className="flex items-center justify-between gap-2 px-2 pb-1.5 border-b border-border mb-1 text-[10px] font-medium text-muted-foreground">
+              <span>
+                {menuCell
+                  ? "Сменить тег"
+                  : selection
+                    ? `Выбрано ${(selection.end - selection.start + 1) * (selection.endDay - selection.startDay + 1)} блоков`
+                    : "Выбор тега"}
+              </span>
+              {menuCell ? (
+                <span className="tabular-nums text-foreground/80">
+                  {TIME_SLOTS[menuCell.slotIdx].start.replace(":", ".").replace(/^0/, "")}
+                </span>
+              ) : null}
             </div>
             <div className="space-y-0.5 max-h-64 overflow-y-auto">
               {top7TagIds.size > 0 && (() => {
