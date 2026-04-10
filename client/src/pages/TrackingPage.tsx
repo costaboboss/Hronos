@@ -1070,6 +1070,13 @@ export default function TrackingPage() {
     return pt.dayIdx === dayIdx && slotIdx >= pt.slotIdx && slotIdx < pt.slotIdx + clipboard.length;
   };
 
+  const formatSlotDuration = (blockCount: number) => {
+    const minutes = blockCount * 15;
+    if (minutes < 60) return `${minutes} мин`;
+    const hours = minutes / 60;
+    return `${Number.isInteger(hours) ? hours : hours.toFixed(1)} ч`;
+  };
+
   // Row height state
   const [rowHeight, setRowHeight] = useState(22);
   const ROW_H = rowHeight;
@@ -1804,8 +1811,14 @@ export default function TrackingPage() {
           <div
             className="flex-1 overflow-x-auto overflow-y-visible"
             style={{ userSelect: "none" }}
-            onMouseLeave={() => { if (dragState?.active) setDragState(null); }}
-            onMouseUp={() => { if (dragState?.active) setDragState(null); }}
+            onMouseLeave={() => {
+              if (dragState?.active) setDragState(null);
+              if (fillDownState?.active) setFillDownState(null);
+            }}
+            onMouseUp={() => {
+              if (dragState?.active) setDragState(null);
+              if (fillDownState?.active) setFillDownState(null);
+            }}
           >
           <table className="w-full border-collapse table-fixed" style={{ minWidth: 700 }}>
             <thead className="sticky z-20 bg-background" style={{ top: 0 }}>
@@ -1867,6 +1880,15 @@ export default function TrackingPage() {
                         fillDownState.dayIdx === di &&
                         si >= Math.min(fillDownState.startSlot, fillDownState.endSlot) &&
                         si <= Math.max(fillDownState.startSlot, fillDownState.endSlot);
+                      const isFillEndpoint =
+                        fillDownState?.active &&
+                        fillDownState.dayIdx === di &&
+                        fillDownState.endSlot === si;
+                      const fillRangeStart = fillDownState ? Math.min(fillDownState.startSlot, fillDownState.endSlot) : si;
+                      const fillRangeEnd = fillDownState ? Math.max(fillDownState.startSlot, fillDownState.endSlot) : si;
+                      const fillBlockCount = fillRangeEnd - fillRangeStart + 1;
+                      const fillStartSlot = TIME_SLOTS[fillRangeStart];
+                      const fillEndSlot = TIME_SLOTS[fillRangeEnd];
                       const isGap = gapKeySet.has(`${dateStr}_${slot.start}`);
 
                       return (
@@ -1915,6 +1937,26 @@ export default function TrackingPage() {
                                   onMouseDown={(e) => startFillDown(di, si, dateStr, tag, e)}
                                   title="Протянуть вниз"
                                 />
+                              )}
+                              {isFillEndpoint && fillDownState && fillStartSlot && fillEndSlot && (
+                                <div className="pointer-events-none absolute left-[calc(100%+6px)] top-1/2 z-30 min-w-36 -translate-y-1/2 rounded-lg border border-cyan-300/70 bg-slate-950/95 px-3 py-2 text-left text-[11px] text-white shadow-2xl shadow-cyan-950/40">
+                                  <div className="mb-1 flex items-center gap-1.5 font-semibold">
+                                    <span
+                                      className="h-2 w-2 rounded-full"
+                                      style={{ backgroundColor: fillDownState.tag.color }}
+                                    />
+                                    <span className="truncate">{fillDownState.tag.name}</span>
+                                  </div>
+                                  <div className="font-mono text-cyan-200">
+                                    {slot.start}–{slot.end}
+                                  </div>
+                                  <div className="mt-0.5 text-white/80">
+                                    {fillStartSlot.start}–{fillEndSlot.end}
+                                  </div>
+                                  <div className="mt-0.5 text-white/60">
+                                    {fillBlockCount} бл. • {formatSlotDuration(fillBlockCount)}
+                                  </div>
+                                </div>
                               )}
                             </td>
                           </ContextMenuTrigger>
