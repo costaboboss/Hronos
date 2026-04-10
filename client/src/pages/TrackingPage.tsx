@@ -973,9 +973,50 @@ export default function TrackingPage() {
     setPasteTargetDisplay({ dayIdx, slotIdx });
   }, []);
 
-  const handleMultiTagSelect = useCallback((tag: TagItem | null) => {
+  const focusTagMenuCell = useCallback((cell: { dayIdx: number; slotIdx: number; dateStr: string }) => {
+    const newSelection = { startDay: cell.dayIdx, endDay: cell.dayIdx, start: cell.slotIdx, end: cell.slotIdx };
+    const slot = TIME_SLOTS[cell.slotIdx];
+    const element = globalThis.document?.querySelector<HTMLElement>(`[data-grid-cell="${cell.dateStr}_${slot.start}"]`);
+    const rect = element?.getBoundingClientRect();
+
+    setSelection(newSelection);
+    selectionRef.current = newSelection;
+    setMenuCell(cell);
+    setActiveCell({ dayIdx: cell.dayIdx, slotIdx: cell.slotIdx });
+    setPasteTarget(cell.dayIdx, cell.slotIdx);
+    setNewTagForMulti("");
+    setMultiMenuPos(
+      rect
+        ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+        : { x: window.innerWidth / 2, y: window.innerHeight / 2 }
+    );
+    setMultiMenuOpen(true);
+  }, [setPasteTarget]);
+
+  const focusNextTagMenuCell = useCallback((cell: { dayIdx: number; slotIdx: number; dateStr: string }) => {
+    const nextSlotIdx = cell.slotIdx + 1;
+    if (nextSlotIdx >= TIME_SLOTS.length) {
+      setMultiMenuOpen(false);
+      setMultiMenuPos(null);
+      setMenuCell(null);
+      setActiveCell(null);
+      return;
+    }
+
+    window.setTimeout(() => {
+      focusTagMenuCell({ ...cell, slotIdx: nextSlotIdx });
+    }, 0);
+  }, [focusTagMenuCell]);
+
+  const handleMultiTagSelect = useCallback((tag: TagItem | null, options?: { advanceToNextCell?: boolean }) => {
     const sel = selectionRef.current;
     if (!sel) return;
+    const singleCell =
+      sel.startDay === sel.endDay &&
+      sel.start === sel.end &&
+      menuCell &&
+      menuCell.dayIdx === sel.startDay &&
+      menuCell.slotIdx === sel.start;
     const entries = [];
     for (let d = sel.startDay; d <= sel.endDay; d++) {
       const dateStr = format(daysRef.current[d], "yyyy-MM-dd");
@@ -993,12 +1034,15 @@ export default function TrackingPage() {
     setMultiMenuPos(null);
     setMenuCell(null);
     setActiveCell(null);
-  }, [applyEntriesChange]);
+    if (options?.advanceToNextCell && singleCell) {
+      focusNextTagMenuCell(menuCell);
+    }
+  }, [applyEntriesChange, focusNextTagMenuCell, menuCell]);
 
-  const handleMultiAddTag = useCallback((name: string) => {
+  const handleMultiAddTag = useCallback((name: string, options?: { advanceToNextCell?: boolean }) => {
     createTagMutation.mutate({ name, color: COLORS[Math.floor(Math.random() * COLORS.length)] }, {
       onSuccess: (newTag) => {
-        if (newTag) handleMultiTagSelect(newTag as TagItem);
+        if (newTag) handleMultiTagSelect(newTag as TagItem, options);
       }
     });
   }, [createTagMutation, handleMultiTagSelect]);
@@ -2319,12 +2363,20 @@ export default function TrackingPage() {
                 className="h-7 text-xs bg-input"
                 autoFocus
                 onKeyDown={e => {
-                  if (e.key === "Enter" && newTagForMulti.trim()) { handleMultiAddTag(newTagForMulti.trim()); setNewTagForMulti(""); }
+                  if (e.key === "Enter" && newTagForMulti.trim()) {
+                    handleMultiAddTag(newTagForMulti.trim(), { advanceToNextCell: true });
+                    setNewTagForMulti("");
+                  }
                   if (e.key === "Escape") { setMultiMenuOpen(false); setMultiMenuPos(null); setActiveCell(null); }
                 }}
               />
               <Button size="sm" variant="ghost" className="h-7 w-7 p-0"
-                onClick={() => { if (newTagForMulti.trim()) { handleMultiAddTag(newTagForMulti.trim()); setNewTagForMulti(""); } }}>
+                onClick={() => {
+                  if (newTagForMulti.trim()) {
+                    handleMultiAddTag(newTagForMulti.trim(), { advanceToNextCell: true });
+                    setNewTagForMulti("");
+                  }
+                }}>
                 <Plus className="w-3 h-3" />
               </Button>
             </div>
