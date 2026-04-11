@@ -7,6 +7,10 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
 
+function normalizeTagName(value: string) {
+  return value.trim().toLowerCase();
+}
+
 export const appRouter = router({
   system: systemRouter,
   tardis: tardisRouter,
@@ -30,7 +34,15 @@ export const appRouter = router({
     create: protectedProcedure
       .input(z.object({ name: z.string().min(1).max(100), color: z.string().max(20).default("#6366f1") }))
       .mutation(async ({ ctx, input }) => {
-        return db.createTag({ userId: ctx.user.id, name: input.name, color: input.color, isDefault: false });
+        const trimmedName = input.name.trim();
+        const existingTags = await db.getTagsByUser(ctx.user.id);
+        const existingTag = existingTags.find(tag => normalizeTagName(tag.name) === normalizeTagName(trimmedName));
+
+        if (existingTag) {
+          return existingTag;
+        }
+
+        return db.createTag({ userId: ctx.user.id, name: trimmedName, color: input.color, isDefault: false });
       }),
 
     update: protectedProcedure
@@ -48,13 +60,13 @@ export const appRouter = router({
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        const dbConn = await db.getDb();
-        if (!dbConn) throw new Error("DB unavailable");
-        const { eq, and } = await import("drizzle-orm");
-        const { tags } = await import("../drizzle/schema");
-        await dbConn.delete(tags).where(and(eq(tags.id, input.id), eq(tags.userId, ctx.user.id)));
+        await db.deleteTag(input.id, ctx.user.id);
         return { success: true };
       }),
+
+    cleanupDuplicates: protectedProcedure.mutation(async ({ ctx }) => {
+      return db.cleanupDuplicateTags(ctx.user.id);
+    }),
 
     createMany: protectedProcedure
       .input(z.array(z.object({ name: z.string().min(1).max(100), color: z.string().max(20) })))

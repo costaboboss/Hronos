@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Briefcase, Tag, Plus, Pencil, Check, X } from "lucide-react";
+import { Briefcase, Tag, Plus, Pencil, Check, X, Trash2 } from "lucide-react";
 import { getTagGoals, setTagGoal } from "@/lib/planning";
 
 type TagItem = {
@@ -35,6 +35,10 @@ const COLORS = [
   "#22c55e",
 ];
 
+function normalizeTagName(value: string) {
+  return value.trim().toLowerCase();
+}
+
 export default function TagsPage() {
   const { user } = useAuth();
   const utils = trpc.useUtils();
@@ -52,18 +56,39 @@ export default function TagsPage() {
     onSuccess: () => {
       utils.tags.list.invalidate();
       setEditingId(null);
+      toast.success("Тег обновлен");
     },
     onError: () => toast.error("Ошибка сохранения"),
   });
 
   const createMutation = trpc.tags.create.useMutation({
-    onSuccess: () => {
+    onSuccess: (tag) => {
       utils.tags.list.invalidate();
       setNewName("");
       setNewColor(COLORS[0]);
-      toast.success("Тег создан");
+      toast.success(tag ? `Тег «${tag.name}» готов` : "Тег готов");
     },
     onError: () => toast.error("Ошибка создания тега"),
+  });
+
+  const deleteMutation = trpc.tags.delete.useMutation({
+    onSuccess: () => {
+      utils.tags.list.invalidate();
+      toast.success("Тег удален");
+    },
+    onError: () => toast.error("Ошибка удаления тега"),
+  });
+
+  const cleanupDuplicatesMutation = trpc.tags.cleanupDuplicates.useMutation({
+    onSuccess: ({ deletedCount }) => {
+      utils.tags.list.invalidate();
+      toast.success(
+        deletedCount > 0
+          ? `Удалено дублей: ${deletedCount}`
+          : "Дубликатов по одинаковому названию не найдено"
+      );
+    },
+    onError: () => toast.error("Не удалось очистить дубликаты"),
   });
 
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -77,6 +102,24 @@ export default function TagsPage() {
   useEffect(() => {
     setTagGoals(getTagGoals());
   }, []);
+
+  const normalizedNameCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const tag of tagList as TagItem[]) {
+      const key = normalizeTagName(tag.name);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }, [tagList]);
+
+  const duplicateCount = useMemo(
+    () =>
+      Array.from(normalizedNameCounts.values()).reduce(
+        (sum, count) => sum + Math.max(count - 1, 0),
+        0
+      ),
+    [normalizedNameCounts]
+  );
 
   const workTags = (tagList as TagItem[]).filter((tag) => tag.isWork);
   const nonWorkTags = (tagList as TagItem[]).filter((tag) => !tag.isWork);
@@ -98,6 +141,10 @@ export default function TagsPage() {
     setWorkMutation.mutate({ id: tag.id, isWork: !tag.isWork });
   };
 
+  const handleDelete = (tag: TagItem) => {
+    deleteMutation.mutate({ id: tag.id });
+  };
+
   const handleCreate = () => {
     if (!newName.trim()) return;
     createMutation.mutate({ name: newName.trim(), color: newColor });
@@ -105,43 +152,93 @@ export default function TagsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         Загрузка...
       </div>
     );
   }
 
   return (
-    <div className="mx-auto flex-1 w-full max-w-3xl overflow-auto p-6">
-      <div className="mb-6">
-        <h1 className="flex items-center gap-2 text-xl font-bold text-foreground">
-          <Tag className="h-5 w-5 text-primary" />
-          Категории тегов
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Управляйте тегами и отмечайте «рабочие» — те, которые двигают жизнь вперёд.
-          Норма: 40 рабочих блоков в день (10 часов = 100%).
-        </p>
-      </div>
-
-      <div className="mb-6">
-        <div className="mb-3 flex items-center gap-2">
-          <Briefcase className="h-4 w-4 text-amber-400" />
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-amber-400">
-            Рабочие теги ({workTags.length})
-          </h2>
+    <div className="mx-auto flex w-full max-w-4xl flex-1 overflow-auto p-6">
+      <div className="w-full space-y-6">
+        <div className="space-y-2">
+          <h1 className="flex items-center gap-2 text-xl font-bold text-foreground">
+            <Tag className="h-5 w-5 text-primary" />
+            Категории тегов
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Здесь можно редактировать теги, удалять лишние и быстро вычищать дубликаты. Рабочие теги
+            участвуют в расчете продуктивности.
+          </p>
         </div>
-        {workTags.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
-            Нет рабочих тегов. Включите переключатель «Рабочий» у нужных тегов ниже.
+
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card p-4">
+          <div className="text-sm text-muted-foreground">
+            Всего тегов: <span className="font-medium text-foreground">{tagList.length}</span>
           </div>
-        ) : (
-          <div className="space-y-1">
-            {workTags.map((tag) => (
+          <div className="text-sm text-muted-foreground">
+            Дубликатов по названию: <span className="font-medium text-foreground">{duplicateCount}</span>
+          </div>
+          <Button
+            variant="outline"
+            className="ml-auto"
+            onClick={() => cleanupDuplicatesMutation.mutate()}
+            disabled={cleanupDuplicatesMutation.isPending}
+          >
+            Очистить дубли
+          </Button>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Briefcase className="h-4 w-4 text-amber-400" />
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-amber-400">
+              Рабочие теги ({workTags.length})
+            </h2>
+          </div>
+          {workTags.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
+              Пока нет рабочих тегов. Включи переключатель `Рабочий` у нужных тегов ниже.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {workTags.map((tag) => (
+                <TagRow
+                  key={tag.id}
+                  tag={tag}
+                  goalHours={tagGoals[String(tag.id)] ?? null}
+                  isDuplicate={(normalizedNameCounts.get(normalizeTagName(tag.name)) ?? 0) > 1}
+                  isEditing={editingId === tag.id}
+                  editName={editName}
+                  editColor={editColor}
+                  onEditName={setEditName}
+                  onEditColor={setEditColor}
+                  onStartEdit={() => startEdit(tag)}
+                  onSaveEdit={() => saveEdit(tag)}
+                  onCancelEdit={cancelEdit}
+                  onToggleWork={() => toggleWork(tag)}
+                  onDelete={() => handleDelete(tag)}
+                  onGoalChange={(hours) => setTagGoals(setTagGoal(tag.id, hours))}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Tag className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              Остальные теги ({nonWorkTags.length})
+            </h2>
+          </div>
+          <div className="space-y-2">
+            {nonWorkTags.map((tag) => (
               <TagRow
                 key={tag.id}
                 tag={tag}
                 goalHours={tagGoals[String(tag.id)] ?? null}
+                isDuplicate={(normalizedNameCounts.get(normalizeTagName(tag.name)) ?? 0) > 1}
                 isEditing={editingId === tag.id}
                 editName={editName}
                 editColor={editColor}
@@ -151,78 +248,51 @@ export default function TagsPage() {
                 onSaveEdit={() => saveEdit(tag)}
                 onCancelEdit={cancelEdit}
                 onToggleWork={() => toggleWork(tag)}
+                onDelete={() => handleDelete(tag)}
                 onGoalChange={(hours) => setTagGoals(setTagGoal(tag.id, hours))}
               />
             ))}
           </div>
-        )}
-      </div>
-
-      <div className="mb-6">
-        <div className="mb-3 flex items-center gap-2">
-          <Tag className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Остальные теги ({nonWorkTags.length})
-          </h2>
         </div>
-        <div className="space-y-1">
-          {nonWorkTags.map((tag) => (
-            <TagRow
-              key={tag.id}
-              tag={tag}
-              goalHours={tagGoals[String(tag.id)] ?? null}
-              isEditing={editingId === tag.id}
-              editName={editName}
-              editColor={editColor}
-              onEditName={setEditName}
-              onEditColor={setEditColor}
-              onStartEdit={() => startEdit(tag)}
-              onSaveEdit={() => saveEdit(tag)}
-              onCancelEdit={cancelEdit}
-              onToggleWork={() => toggleWork(tag)}
-              onGoalChange={(hours) => setTagGoals(setTagGoal(tag.id, hours))}
+
+        <div className="rounded-lg border border-border bg-card p-4">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Plus className="h-4 w-4" />
+            Новый тег
+          </h3>
+          <div className="flex items-center gap-3">
+            <div className="flex flex-wrap gap-1.5">
+              {COLORS.map((color) => (
+                <button
+                  key={color}
+                  className={`h-5 w-5 rounded-full transition-all ${
+                    newColor === color
+                      ? "scale-110 ring-2 ring-white ring-offset-1 ring-offset-background"
+                      : "opacity-70 hover:opacity-100"
+                  }`}
+                  style={{ backgroundColor: color }}
+                  onClick={() => setNewColor(color)}
+                />
+              ))}
+            </div>
+            <Input
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+              placeholder="Название тега..."
+              className="h-8 flex-1 bg-input text-sm"
+              onKeyDown={(event) => {
+                if (event.key === "Enter") handleCreate();
+              }}
             />
-          ))}
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-border bg-card p-4">
-        <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Plus className="h-4 w-4" />
-          Новый тег
-        </h3>
-        <div className="flex items-center gap-3">
-          <div className="flex flex-wrap gap-1.5">
-            {COLORS.map((color) => (
-              <button
-                key={color}
-                className={`h-5 w-5 rounded-full transition-all ${
-                  newColor === color
-                    ? "scale-110 ring-2 ring-white ring-offset-1 ring-offset-background"
-                    : "opacity-70 hover:opacity-100"
-                }`}
-                style={{ backgroundColor: color }}
-                onClick={() => setNewColor(color)}
-              />
-            ))}
+            <Button
+              size="sm"
+              className="h-8"
+              onClick={handleCreate}
+              disabled={!newName.trim() || createMutation.isPending}
+            >
+              Создать
+            </Button>
           </div>
-          <Input
-            value={newName}
-            onChange={(event) => setNewName(event.target.value)}
-            placeholder="Название тега..."
-            className="h-8 flex-1 bg-input text-sm"
-            onKeyDown={(event) => {
-              if (event.key === "Enter") handleCreate();
-            }}
-          />
-          <Button
-            size="sm"
-            className="h-8"
-            onClick={handleCreate}
-            disabled={!newName.trim() || createMutation.isPending}
-          >
-            Создать
-          </Button>
         </div>
       </div>
     </div>
@@ -232,6 +302,7 @@ export default function TagsPage() {
 function TagRow({
   tag,
   goalHours,
+  isDuplicate,
   isEditing,
   editName,
   editColor,
@@ -241,10 +312,12 @@ function TagRow({
   onSaveEdit,
   onCancelEdit,
   onToggleWork,
+  onDelete,
   onGoalChange,
 }: {
   tag: TagItem;
   goalHours: number | null;
+  isDuplicate: boolean;
   isEditing: boolean;
   editName: string;
   editColor: string;
@@ -254,6 +327,7 @@ function TagRow({
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   onToggleWork: () => void;
+  onDelete: () => void;
   onGoalChange: (hours: number | null) => void;
 }) {
   return (
@@ -296,7 +370,14 @@ function TagRow({
           }}
         />
       ) : (
-        <span className="flex-1 text-sm text-foreground">{tag.name}</span>
+        <div className="flex flex-1 items-center gap-2">
+          <span className="text-sm text-foreground">{tag.name}</span>
+          {isDuplicate ? (
+            <Badge variant="outline" className="border-rose-400/40 bg-rose-400/10 text-[10px] text-rose-300">
+              дубль
+            </Badge>
+          ) : null}
+        </div>
       )}
 
       {tag.isWork && !isEditing && (
@@ -346,14 +427,24 @@ function TagRow({
             </Button>
           </>
         ) : (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-            onClick={onStartEdit}
-          >
-            <Pencil className="h-3 w-3" />
-          </Button>
+          <>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+              onClick={onStartEdit}
+            >
+              <Pencil className="h-3 w-3" />
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 p-0 text-rose-400 hover:text-rose-300"
+              onClick={onDelete}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </>
         )}
 
         <div className="flex items-center gap-1.5">

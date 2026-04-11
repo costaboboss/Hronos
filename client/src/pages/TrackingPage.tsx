@@ -1040,7 +1040,15 @@ export default function TrackingPage() {
   }, [applyEntriesChange, focusNextTagMenuCell, menuCell]);
 
   const handleMultiAddTag = useCallback((name: string, options?: { advanceToNextCell?: boolean }) => {
-    createTagMutation.mutate({ name, color: COLORS[Math.floor(Math.random() * COLORS.length)] }, {
+    const normalizedName = name.trim().toLowerCase();
+    const existingTag = tagListRef.current.find((tag) => tag.name.trim().toLowerCase() === normalizedName);
+
+    if (existingTag) {
+      handleMultiTagSelect(existingTag, options);
+      return;
+    }
+
+    createTagMutation.mutate({ name: name.trim(), color: COLORS[Math.floor(Math.random() * COLORS.length)] }, {
       onSuccess: (newTag) => {
         if (newTag) handleMultiTagSelect(newTag as TagItem, options);
       }

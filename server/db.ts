@@ -159,6 +159,51 @@ export async function deleteTag(id: number, userId: number) {
   await db.delete(tags).where(and(eq(tags.id, id), eq(tags.userId, userId)));
 }
 
+export async function cleanupDuplicateTags(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+
+  const userTags = await db.select().from(tags).where(eq(tags.userId, userId));
+  const groups = new Map<string, typeof userTags>();
+
+  for (const tag of userTags) {
+    const key = tag.name.trim().toLowerCase();
+    const bucket = groups.get(key) ?? [];
+    bucket.push(tag);
+    groups.set(key, bucket);
+  }
+
+  let deletedCount = 0;
+
+  for (const group of Array.from(groups.values())) {
+    if (group.length < 2) continue;
+
+    const sorted = [...group].sort((left, right) => {
+      if (left.isDefault !== right.isDefault) return left.isDefault ? -1 : 1;
+      if (left.isWork !== right.isWork) return left.isWork ? -1 : 1;
+      return left.id - right.id;
+    });
+
+    const [keeper, ...duplicates] = sorted;
+
+    for (const duplicate of duplicates) {
+      await db
+        .update(timeEntries)
+        .set({
+          tagId: keeper.id,
+          tagName: keeper.name,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(timeEntries.userId, userId), eq(timeEntries.tagId, duplicate.id)));
+
+      await db.delete(tags).where(and(eq(tags.id, duplicate.id), eq(tags.userId, userId)));
+      deletedCount += 1;
+    }
+  }
+
+  return { deletedCount };
+}
+
 export async function upsertTimeEntry(entry: InsertTimeEntry) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
