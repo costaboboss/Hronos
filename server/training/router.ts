@@ -1,24 +1,30 @@
 import {
   createTrainingExerciseInputSchema,
   createTrainingSessionInputSchema,
+  deleteTrainingSessionInputSchema,
   trainingCellInputSchema,
   trainingHistoryInputSchema,
   trainingListSessionsInputSchema,
+  trainingMonthSessionsInputSchema,
   trainingMonthInputSchema,
   trainingSessionDetailsInputSchema,
   trainingYearInputSchema,
+  updateTrainingSessionInputSchema,
 } from "@shared/training";
 import { protectedProcedure, router } from "../_core/trpc";
 import {
   createUserExercise,
   createUserSession,
+  deleteUserSession,
   getUserExerciseHistory,
   getUserSessionDetailsByDate,
   getUserTrainingDashboard,
   getUserTrainingMatrix,
   getUserTrainingYearOverview,
+  listUserMonthSessions,
   listUserExercises,
   listUserRecentSessions,
+  updateUserSession,
   upsertUserTrainingCell,
 } from "./service";
 
@@ -37,6 +43,10 @@ export const trainingRouter = router({
     .input(trainingListSessionsInputSchema.optional())
     .query(({ ctx, input }) => listUserRecentSessions(ctx.user.id, input?.limit ?? 10)),
 
+  listMonthSessions: protectedProcedure
+    .input(trainingMonthSessionsInputSchema)
+    .query(({ ctx, input }) => listUserMonthSessions(ctx.user.id, input.year, input.month)),
+
   history: protectedProcedure
     .input(trainingHistoryInputSchema)
     .query(({ ctx, input }) => getUserExerciseHistory(ctx.user.id, input.exerciseId, input.limit)),
@@ -52,6 +62,14 @@ export const trainingRouter = router({
   upsertCell: protectedProcedure
     .input(trainingCellInputSchema)
     .mutation(({ ctx, input }) => upsertUserTrainingCell(ctx.user.id, input)),
+
+  updateSession: protectedProcedure
+    .input(updateTrainingSessionInputSchema)
+    .mutation(({ ctx, input }) => updateUserSession(ctx.user.id, input)),
+
+  deleteSession: protectedProcedure
+    .input(deleteTrainingSessionInputSchema)
+    .mutation(({ ctx, input }) => deleteUserSession(ctx.user.id, input.sessionId)),
 
   dashboard: protectedProcedure.query(({ ctx }) => getUserTrainingDashboard(ctx.user.id)),
 

@@ -30,32 +30,42 @@ type ImportEntry = {
   rawInput: string;
 };
 
+type EditableSession = {
+  id: number;
+  title: string;
+  date: string;
+  startTimeText: string;
+  durationMinutes: string;
+  notes: string;
+  exercises: ExerciseDraft[];
+};
+
 const russianMonthMap: Record<string, number> = {
-  январь: 1,
-  янв: 1,
-  февраль: 2,
-  фев: 2,
-  март: 3,
-  мар: 3,
-  апрель: 4,
-  апр: 4,
-  май: 5,
-  мая: 5,
-  июнь: 6,
-  июн: 6,
-  июль: 7,
-  июл: 7,
-  август: 8,
-  авг: 8,
-  сентябрь: 9,
-  сент: 9,
-  сен: 9,
-  октябрь: 10,
-  окт: 10,
-  ноябрь: 11,
-  ноя: 11,
-  декабрь: 12,
-  дек: 12,
+  "СЏРЅРІР°СЂСЊ": 1,
+  "СЏРЅРІ": 1,
+  "С„РµРІСЂР°Р»СЊ": 2,
+  "С„РµРІ": 2,
+  "РјР°СЂС‚": 3,
+  "РјР°СЂ": 3,
+  "Р°РїСЂРµР»СЊ": 4,
+  "Р°РїСЂ": 4,
+  "РјР°Р№": 5,
+  "РјР°СЏ": 5,
+  "РёСЋРЅСЊ": 6,
+  "РёСЋРЅ": 6,
+  "РёСЋР»СЊ": 7,
+  "РёСЋР»": 7,
+  "Р°РІРіСѓСЃС‚": 8,
+  "Р°РІРі": 8,
+  "СЃРµРЅС‚СЏР±СЂСЊ": 9,
+  "СЃРµРЅС‚": 9,
+  "СЃРµРЅ": 9,
+  "РѕРєС‚СЏР±СЂСЊ": 10,
+  "РѕРєС‚": 10,
+  "РЅРѕСЏР±СЂСЊ": 11,
+  "РЅРѕСЏ": 11,
+  "РґРµРєР°Р±СЂСЊ": 12,
+  "РґРµРє": 12,
 };
 
 function createExerciseDraft(): ExerciseDraft {
@@ -64,6 +74,17 @@ function createExerciseDraft(): ExerciseDraft {
     name: "",
     weightKg: "",
     reps: "",
+  };
+}
+
+function resetTrainingForm() {
+  return {
+    date: format(new Date(), "yyyy-MM-dd"),
+    title: "",
+    startTimeText: "",
+    durationMinutes: "",
+    notes: "",
+    exercises: [createExerciseDraft()],
   };
 }
 
@@ -104,21 +125,21 @@ function extractParagraphBlocks(cell: Element) {
 
 function parseExerciseParagraph(lines: string[]) {
   const joined = lines.join("\n").trim();
-  if (!joined || /^итого[:\s]/i.test(joined)) return null;
+  if (!joined || /^РёС‚РѕРіРѕ[:\s]/i.test(joined)) return null;
 
-  let exerciseName = lines[0].replace(/[:：]\s*$/, "").trim();
+  let exerciseName = lines[0].replace(/[:пјљ]\s*$/, "").trim();
   const restLines = [...lines.slice(1)];
-  const sameLineMatch = exerciseName.match(/^(.+?)(\d+(?:[.,]\d+)?\s*(?:кг|kg)|\d+\.)/i);
+  const sameLineMatch = exerciseName.match(/^(.+?)(\d+(?:[.,]\d+)?\s*(?:РєРі|kg)|\d+\.)/i);
 
   if (sameLineMatch) {
-    exerciseName = sameLineMatch[1].trim().replace(/[:：]\s*$/, "");
+    exerciseName = sameLineMatch[1].trim().replace(/[:пјљ]\s*$/, "");
     restLines.unshift(lines[0].slice(sameLineMatch[1].length).trim());
   }
 
   const cleanedRest = restLines
     .map(line => normalizeText(line))
     .filter(Boolean)
-    .filter(line => !/^итого[:\s]/i.test(line))
+    .filter(line => !/^РёС‚РѕРіРѕ[:\s]/i.test(line))
     .filter(line => !/^\d[\d\s.,]*$/.test(line));
 
   const rawInput = cleanedRest.join("\n").trim();
@@ -181,27 +202,21 @@ export default function TrainingPage() {
   const [cursorDate, setCursorDate] = useState(() => new Date());
   const [yearCursor, setYearCursor] = useState(() => new Date().getFullYear());
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingSession, setEditingSession] = useState<EditableSession | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [importYear, setImportYear] = useState(() => new Date().getFullYear());
   const [importSource, setImportSource] = useState("");
   const [importFileName, setImportFileName] = useState("");
   const [showImportSource, setShowImportSource] = useState(false);
   const [selectedImportKeys, setSelectedImportKeys] = useState<string[]>([]);
-  const [trainingForm, setTrainingForm] = useState({
-    date: format(new Date(), "yyyy-MM-dd"),
-    title: "",
-    startTimeText: "",
-    durationMinutes: "",
-    notes: "",
-    exercises: [createExerciseDraft()],
-  });
+  const [trainingForm, setTrainingForm] = useState(resetTrainingForm);
 
   const year = cursorDate.getFullYear();
   const month = cursorDate.getMonth() + 1;
 
   const matrixQuery = trpc.training.matrixByMonth.useQuery({ year, month });
   const yearOverviewQuery = trpc.training.yearOverview.useQuery({ year: yearCursor });
-  const recentSessionsQuery = trpc.training.listRecentSessions.useQuery({ limit: 8 });
+  const monthSessionsQuery = trpc.training.listMonthSessions.useQuery({ year, month });
   const exercisesQuery = trpc.training.listExercises.useQuery();
   const createExercise = trpc.training.createExercise.useMutation();
 
@@ -210,21 +225,48 @@ export default function TrainingPage() {
       await Promise.all([
         utils.training.matrixByMonth.invalidate(),
         utils.training.yearOverview.invalidate(),
-        utils.training.listRecentSessions.invalidate(),
+        utils.training.listMonthSessions.invalidate(),
         utils.training.dashboard.invalidate(),
         utils.training.listExercises.invalidate(),
       ]);
 
       setCreateOpen(false);
-      setTrainingForm({
-        date: format(new Date(), "yyyy-MM-dd"),
-        title: "",
-        startTimeText: "",
-        durationMinutes: "",
-        notes: "",
-        exercises: [createExerciseDraft()],
-      });
-      toast.success("Тренировка добавлена");
+      setEditingSession(null);
+      setTrainingForm(resetTrainingForm());
+      toast.success("РўСЂРµРЅРёСЂРѕРІРєР° РґРѕР±Р°РІР»РµРЅР°");
+    },
+  });
+
+  const updateSession = trpc.training.updateSession.useMutation({
+    onSuccess: async () => {
+      await Promise.all([
+        utils.training.matrixByMonth.invalidate(),
+        utils.training.yearOverview.invalidate(),
+        utils.training.listMonthSessions.invalidate(),
+        utils.training.dashboard.invalidate(),
+        utils.training.listExercises.invalidate(),
+      ]);
+
+      setCreateOpen(false);
+      setEditingSession(null);
+      setTrainingForm(resetTrainingForm());
+      toast.success("РўСЂРµРЅРёСЂРѕРІРєР° РѕР±РЅРѕРІР»РµРЅР°");
+    },
+  });
+
+  const deleteSession = trpc.training.deleteSession.useMutation({
+    onSuccess: async () => {
+      await Promise.all([
+        utils.training.matrixByMonth.invalidate(),
+        utils.training.yearOverview.invalidate(),
+        utils.training.listMonthSessions.invalidate(),
+        utils.training.dashboard.invalidate(),
+      ]);
+
+      setCreateOpen(false);
+      setEditingSession(null);
+      setTrainingForm(resetTrainingForm());
+      toast.success("РўСЂРµРЅРёСЂРѕРІРєР° СѓРґР°Р»РµРЅР°");
     },
   });
 
@@ -233,7 +275,7 @@ export default function TrainingPage() {
       await Promise.all([
         utils.training.matrixByMonth.invalidate(),
         utils.training.yearOverview.invalidate(),
-        utils.training.listRecentSessions.invalidate(),
+        utils.training.listMonthSessions.invalidate(),
         utils.training.dashboard.invalidate(),
         utils.training.listExercises.invalidate(),
       ]);
@@ -295,6 +337,15 @@ export default function TrainingPage() {
     };
   }, [monthDays, monthExercises]);
 
+  const monthSessions = useMemo(
+    () =>
+      [...(monthSessionsQuery.data ?? [])].sort(
+        (left, right) =>
+          new Date(right.performedAt).getTime() - new Date(left.performedAt).getTime()
+      ),
+    [monthSessionsQuery.data]
+  );
+
   async function handleSubmitTraining() {
     const normalizedRows = trainingForm.exercises
       .map(row => ({
@@ -306,17 +357,17 @@ export default function TrainingPage() {
       .filter(row => row.name || row.weightKg || row.reps);
 
     if (!trainingForm.title.trim()) {
-      toast.error("Нужно указать название тренировки");
+      toast.error("РќСѓР¶РЅРѕ СѓРєР°Р·Р°С‚СЊ РЅР°Р·РІР°РЅРёРµ С‚СЂРµРЅРёСЂРѕРІРєРё");
       return;
     }
 
     if (normalizedRows.length === 0) {
-      toast.error("Добавьте хотя бы одно упражнение");
+      toast.error("Р”РѕР±Р°РІСЊС‚Рµ С…РѕС‚СЏ Р±С‹ РѕРґРЅРѕ СѓРїСЂР°Р¶РЅРµРЅРёРµ");
       return;
     }
 
     if (normalizedRows.some(row => !row.name || !row.weightKg || !row.reps)) {
-      toast.error("Для каждого упражнения заполните название, вес и повторы");
+      toast.error("Р”Р»СЏ РєР°Р¶РґРѕРіРѕ СѓРїСЂР°Р¶РЅРµРЅРёСЏ Р·Р°РїРѕР»РЅРёС‚Рµ РЅР°Р·РІР°РЅРёРµ, РІРµСЃ Рё РїРѕРІС‚РѕСЂС‹");
       return;
     }
 
@@ -342,7 +393,7 @@ export default function TrainingPage() {
       const reps = Number(row.reps.replace(",", "."));
 
       if (!Number.isFinite(weight) || weight < 0 || !Number.isFinite(reps) || reps <= 0) {
-        toast.error(`Проверьте вес и повторы у упражнения "${row.name}"`);
+        toast.error(`РџСЂРѕРІРµСЂСЊС‚Рµ РІРµСЃ Рё РїРѕРІС‚РѕСЂС‹ Сѓ СѓРїСЂР°Р¶РЅРµРЅРёСЏ "${row.name}"`);
         return;
       }
 
@@ -353,13 +404,13 @@ export default function TrainingPage() {
             setType: "work" as const,
             weightKg: Math.round(weight),
             reps: Math.round(reps),
-            rawInput: `${Math.round(weight)}кг ${Math.round(reps)}`,
+            rawInput: `${Math.round(weight)}РєРі ${Math.round(reps)}`,
           },
         ],
       });
     }
 
-    await createSession.mutateAsync({
+    const payload = {
       title: trainingForm.title.trim(),
       performedAt: new Date(`${trainingForm.date}T12:00:00`).toISOString(),
       startTimeText: trainingForm.startTimeText.trim() || undefined,
@@ -368,12 +419,22 @@ export default function TrainingPage() {
         : null,
       notes: trainingForm.notes.trim() || undefined,
       exercises: sessionExercises,
-    });
+    };
+
+    if (editingSession) {
+      await updateSession.mutateAsync({
+        sessionId: editingSession.id,
+        ...payload,
+      });
+      return;
+    }
+
+    await createSession.mutateAsync(payload);
   }
 
   async function handleImport() {
     if (selectedImportEntries.length === 0) {
-      toast.error("Нечего импортировать: выберите хотя бы одну запись");
+      toast.error("РќРµС‡РµРіРѕ РёРјРїРѕСЂС‚РёСЂРѕРІР°С‚СЊ: РІС‹Р±РµСЂРёС‚Рµ С…РѕС‚СЏ Р±С‹ РѕРґРЅСѓ Р·Р°РїРёСЃСЊ");
       return;
     }
 
@@ -399,7 +460,7 @@ export default function TrainingPage() {
         date: entry.date,
         exerciseId: exercise.id,
         rawInput: entry.rawInput,
-        sessionTitle: `Импорт ${entry.date}`,
+        sessionTitle: `РРјРїРѕСЂС‚ ${entry.date}`,
       });
 
       importedCount += 1;
@@ -408,7 +469,7 @@ export default function TrainingPage() {
     setImportOpen(false);
     setImportSource("");
     setSelectedImportKeys([]);
-    toast.success(`Импортировано записей: ${importedCount}`);
+    toast.success(`РРјРїРѕСЂС‚РёСЂРѕРІР°РЅРѕ Р·Р°РїРёСЃРµР№: ${importedCount}`);
   }
 
   async function handleImportFileChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -448,15 +509,74 @@ export default function TrainingPage() {
     }));
   }
 
+  function openCreateDialog() {
+    setEditingSession(null);
+    setTrainingForm(resetTrainingForm());
+    setCreateOpen(true);
+  }
+
+  function openEditDialog(session: NonNullable<(typeof monthSessionsQuery.data)>[number]) {
+    setEditingSession({
+      id: session.id,
+      title: session.title,
+      date: format(new Date(session.performedAt), "yyyy-MM-dd"),
+      startTimeText: session.startTimeText ?? "",
+      durationMinutes: session.durationMinutes ? String(session.durationMinutes) : "",
+      notes: session.notes ?? "",
+      exercises:
+        session.exercises.length > 0
+          ? session.exercises.map(item => {
+              const firstSet = item.sets[0];
+              const weight = firstSet?.weightKg ?? firstSet?.effectiveWeightKg ?? firstSet?.additionalWeightKg ?? 0;
+              const reps = firstSet?.reps ?? 0;
+
+              return {
+                id: Math.random().toString(36).slice(2, 10),
+                name: item.exercise?.name ?? `РЈРїСЂР°Р¶РЅРµРЅРёРµ #${item.exerciseId}`,
+                weightKg: weight ? String(weight) : "",
+                reps: reps ? String(reps) : "",
+              };
+            })
+          : [createExerciseDraft()],
+    });
+    setTrainingForm({
+      date: format(new Date(session.performedAt), "yyyy-MM-dd"),
+      title: session.title,
+      startTimeText: session.startTimeText ?? "",
+      durationMinutes: session.durationMinutes ? String(session.durationMinutes) : "",
+      notes: session.notes ?? "",
+      exercises:
+        session.exercises.length > 0
+          ? session.exercises.map(item => {
+              const firstSet = item.sets[0];
+              const weight = firstSet?.weightKg ?? firstSet?.effectiveWeightKg ?? firstSet?.additionalWeightKg ?? 0;
+              const reps = firstSet?.reps ?? 0;
+
+              return {
+                id: Math.random().toString(36).slice(2, 10),
+                name: item.exercise?.name ?? `РЈРїСЂР°Р¶РЅРµРЅРёРµ #${item.exerciseId}`,
+                weightKg: weight ? String(weight) : "",
+                reps: reps ? String(reps) : "",
+              };
+            })
+          : [createExerciseDraft()],
+    });
+    setCreateOpen(true);
+  }
+
+  async function handleDeleteSession(sessionId: number) {
+    await deleteSession.mutateAsync({ sessionId });
+  }
+
   return (
     <div className="h-full overflow-auto bg-[#07090d] text-slate-100">
       <div className="mx-auto flex max-w-[1600px] flex-col gap-5 p-4">
         <div className="flex flex-wrap items-start justify-between gap-4 border border-white/10 bg-[#0b0f14] px-5 py-4">
           <div className="space-y-2">
             <div className="text-[10px] uppercase tracking-[0.35em] text-slate-500">Training Dashboard</div>
-            <h1 className="text-2xl font-semibold tracking-tight">Тренировки</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">РўСЂРµРЅРёСЂРѕРІРєРё</h1>
             <p className="max-w-3xl text-sm text-slate-400">
-              Месячная грузоподъемность, аналитика по году и быстрый ручной ввод тренировок.
+              РњРµСЃСЏС‡РЅР°СЏ РіСЂСѓР·РѕРїРѕРґСЉРµРјРЅРѕСЃС‚СЊ, Р°РЅР°Р»РёС‚РёРєР° РїРѕ РіРѕРґСѓ Рё Р±С‹СЃС‚СЂС‹Р№ СЂСѓС‡РЅРѕР№ РІРІРѕРґ С‚СЂРµРЅРёСЂРѕРІРѕРє.
             </p>
           </div>
 
@@ -486,7 +606,7 @@ export default function TrainingPage() {
               className="rounded-none border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
               onClick={() => setCursorDate(new Date())}
             >
-              Текущий месяц
+              РўРµРєСѓС‰РёР№ РјРµСЃСЏС†
             </Button>
 
             <Button
@@ -495,12 +615,12 @@ export default function TrainingPage() {
               onClick={() => setImportOpen(true)}
             >
               <FileUp className="mr-2 h-4 w-4" />
-              Импорт HTML
+              РРјРїРѕСЂС‚ HTML
             </Button>
 
-            <Button className="rounded-none" onClick={() => setCreateOpen(true)}>
+            <Button className="rounded-none" onClick={openCreateDialog}>
               <Plus className="mr-2 h-4 w-4" />
-              Добавить тренировку
+              Р”РѕР±Р°РІРёС‚СЊ С‚СЂРµРЅРёСЂРѕРІРєСѓ
             </Button>
           </div>
         </div>
@@ -508,41 +628,41 @@ export default function TrainingPage() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-slate-400">Грузоподъемность месяца</CardTitle>
+              <CardTitle className="text-sm text-slate-400">Р“СЂСѓР·РѕРїРѕРґСЉРµРјРЅРѕСЃС‚СЊ РјРµСЃСЏС†Р°</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-semibold">{formatKg(monthSummary.totalVolume)} кг</div>
-              <div className="mt-2 text-sm text-slate-500">Сумма по всем упражнениям за выбранный месяц</div>
+              <div className="text-3xl font-semibold">{formatKg(monthSummary.totalVolume)} РєРі</div>
+              <div className="mt-2 text-sm text-slate-500">РЎСѓРјРјР° РїРѕ РІСЃРµРј СѓРїСЂР°Р¶РЅРµРЅРёСЏРј Р·Р° РІС‹Р±СЂР°РЅРЅС‹Р№ РјРµСЃСЏС†</div>
             </CardContent>
           </Card>
 
           <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-slate-400">Количество тренировок</CardTitle>
+              <CardTitle className="text-sm text-slate-400">РљРѕР»РёС‡РµСЃС‚РІРѕ С‚СЂРµРЅРёСЂРѕРІРѕРє</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-semibold">{monthSummary.workoutCount}</div>
-              <div className="mt-2 text-sm text-slate-500">Тренировочных дней в месяце</div>
+              <div className="mt-2 text-sm text-slate-500">РўСЂРµРЅРёСЂРѕРІРѕС‡РЅС‹С… РґРЅРµР№ РІ РјРµСЃСЏС†Рµ</div>
             </CardContent>
           </Card>
 
           <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-slate-400">Средняя тренировка</CardTitle>
+              <CardTitle className="text-sm text-slate-400">РЎСЂРµРґРЅСЏСЏ С‚СЂРµРЅРёСЂРѕРІРєР°</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-semibold">{formatKg(monthSummary.averageVolume)} кг</div>
-              <div className="mt-2 text-sm text-slate-500">Средняя грузоподъемность на тренировочный день</div>
+              <div className="text-3xl font-semibold">{formatKg(monthSummary.averageVolume)} РєРі</div>
+              <div className="mt-2 text-sm text-slate-500">РЎСЂРµРґРЅСЏСЏ РіСЂСѓР·РѕРїРѕРґСЉРµРјРЅРѕСЃС‚СЊ РЅР° С‚СЂРµРЅРёСЂРѕРІРѕС‡РЅС‹Р№ РґРµРЅСЊ</div>
             </CardContent>
           </Card>
 
           <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-slate-400">Пиковый день</CardTitle>
+              <CardTitle className="text-sm text-slate-400">РџРёРєРѕРІС‹Р№ РґРµРЅСЊ</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-semibold">{formatKg(monthSummary.maxDayVolume)} кг</div>
-              <div className="mt-2 text-sm text-slate-500">Максимальная грузоподъемность за день</div>
+              <div className="text-3xl font-semibold">{formatKg(monthSummary.maxDayVolume)} РєРі</div>
+              <div className="mt-2 text-sm text-slate-500">РњР°РєСЃРёРјР°Р»СЊРЅР°СЏ РіСЂСѓР·РѕРїРѕРґСЉРµРјРЅРѕСЃС‚СЊ Р·Р° РґРµРЅСЊ</div>
             </CardContent>
           </Card>
         </div>
@@ -551,7 +671,7 @@ export default function TrainingPage() {
           <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
             <CardHeader className="border-b border-white/10 pb-3">
               <div className="flex items-center justify-between gap-3">
-                <CardTitle className="text-base">Аналитика года</CardTitle>
+                <CardTitle className="text-base">РђРЅР°Р»РёС‚РёРєР° РіРѕРґР°</CardTitle>
                 <div className="flex items-center border border-white/10 bg-[#10161d]">
                   <Button
                     variant="ghost"
@@ -573,9 +693,9 @@ export default function TrainingPage() {
             </CardHeader>
             <CardContent className="p-0">
               <div className="grid grid-cols-[minmax(0,1fr)_170px_150px] border-b border-white/10 bg-white/5 px-4 py-3 text-[11px] uppercase tracking-[0.2em] text-slate-500">
-                <div>Месяц</div>
-                <div className="text-right">Грузоподъемность</div>
-                <div className="text-right">Тренировок</div>
+                <div>РњРµСЃСЏС†</div>
+                <div className="text-right">Р“СЂСѓР·РѕРїРѕРґСЉРµРјРЅРѕСЃС‚СЊ</div>
+                <div className="text-right">РўСЂРµРЅРёСЂРѕРІРѕРє</div>
               </div>
 
               <div className="divide-y divide-white/10">
@@ -592,7 +712,7 @@ export default function TrainingPage() {
                       {item.monthLabel}
                     </button>
                     <div className="text-right font-medium text-slate-100">
-                      {formatKg(item.totalVolume)} кг
+                      {formatKg(item.totalVolume)} РєРі
                     </div>
                     <div className="text-right text-slate-400">{item.workoutCount}</div>
                   </div>
@@ -604,7 +724,60 @@ export default function TrainingPage() {
           <div className="space-y-4">
             <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
               <CardHeader className="border-b border-white/10 pb-3">
-                <CardTitle className="text-base">Топ упражнений месяца</CardTitle>
+                <CardTitle className="text-base">РўСЂРµРЅРёСЂРѕРІРєРё РјРµСЃСЏС†Р°</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 pt-4">
+                {monthSessions.length ? (
+                  monthSessions.map(session => {
+                    const sessionVolume = session.exercises.reduce(
+                      (sum, exercise) => sum + (exercise.computedVolume ?? 0),
+                      0
+                    );
+
+                    return (
+                      <div key={session.id} className="border border-white/10 bg-white/5 px-3 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="truncate font-medium text-slate-100">{session.title}</div>
+                            <div className="mt-1 text-xs text-slate-500">
+                              {format(new Date(session.performedAt), "d MMMM yyyy", { locale: ru })}
+                              {session.durationMinutes ? ` вЂў ${session.durationMinutes} РјРёРЅ` : ""}
+                            </div>
+                            <div className="mt-2 text-xs text-slate-400">
+                              {session.exercises.length} СѓРїСЂР°Р¶РЅ. вЂў {formatKg(sessionVolume)} РєРі
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 gap-2">
+                            <Button
+                              variant="outline"
+                              className="rounded-none border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
+                              onClick={() => openEditDialog(session)}
+                            >
+                              РћС‚РєСЂС‹С‚СЊ
+                            </Button>
+                            <Button
+                              variant="outline"
+                              className="rounded-none border-rose-500/30 bg-rose-500/10 text-rose-100 hover:bg-rose-500/20"
+                              onClick={() => handleDeleteSession(session.id)}
+                              disabled={deleteSession.isPending}
+                            >
+                              РЈРґР°Р»РёС‚СЊ
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="border border-dashed border-white/10 px-4 py-6 text-sm text-slate-500">
+                    Р’ РІС‹Р±СЂР°РЅРЅРѕРј РјРµСЃСЏС†Рµ РїРѕРєР° РЅРµС‚ СЃРѕС…СЂР°РЅС‘РЅРЅС‹С… С‚СЂРµРЅРёСЂРѕРІРѕРє.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
+              <CardHeader className="border-b border-white/10 pb-3">
+                <CardTitle className="text-base">РўРѕРї СѓРїСЂР°Р¶РЅРµРЅРёР№ РјРµСЃСЏС†Р°</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 pt-4">
                 {monthSummary.topExercises.length ? (
@@ -615,29 +788,29 @@ export default function TrainingPage() {
                     >
                       <div className="min-w-0">
                         <div className="text-xs uppercase tracking-[0.18em] text-slate-500">
-                          {index + 1} место
+                          {index + 1} РјРµСЃС‚Рѕ
                         </div>
                         <div className="truncate font-medium text-slate-100">{exercise.name}</div>
                       </div>
                       <div className="text-right font-semibold text-slate-100">
-                        {formatKg(exercise.totalVolume)} кг
+                        {formatKg(exercise.totalVolume)} РєРі
                       </div>
                     </div>
                   ))
                 ) : (
                   <div className="border border-dashed border-white/10 px-4 py-6 text-sm text-slate-500">
-                    В выбранном месяце пока нет тренировок.
+                    Р’ РІС‹Р±СЂР°РЅРЅРѕРј РјРµСЃСЏС†Рµ РїРѕРєР° РЅРµС‚ С‚СЂРµРЅРёСЂРѕРІРѕРє.
                   </div>
                 )}
               </CardContent>
             </Card>
             <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
               <CardHeader className="border-b border-white/10 pb-3">
-                <CardTitle className="text-base">Последние тренировки</CardTitle>
+                <CardTitle className="text-base">История выбранного месяца</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 pt-4">
-                {(recentSessionsQuery.data ?? []).length ? (
-                  recentSessionsQuery.data?.map(session => {
+                {monthSessions.length ? (
+                  monthSessions.map(session => {
                     const sessionVolume = session.exercises.reduce(
                       (sum, exercise) => sum + (exercise.computedVolume ?? 0),
                       0
@@ -645,27 +818,41 @@ export default function TrainingPage() {
 
                     return (
                       <div key={session.id} className="border border-white/10 bg-white/5 px-3 py-3">
-                        <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="truncate font-medium text-slate-100">{session.title}</div>
                             <div className="mt-1 text-xs text-slate-500">
                               {format(new Date(session.performedAt), "d MMMM yyyy", { locale: ru })}
+                              {session.durationMinutes ? ` • ${session.durationMinutes} мин` : ""}
+                            </div>
+                            <div className="mt-2 text-xs text-slate-400">
+                              {session.exercises.length} упражн. • {formatKg(sessionVolume)} кг
                             </div>
                           </div>
-                          <div className="text-right text-sm font-semibold text-slate-100">
-                            {formatKg(sessionVolume)} кг
+                          <div className="flex shrink-0 gap-2">
+                            <Button
+                              variant="outline"
+                              className="rounded-none border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
+                              onClick={() => openEditDialog(session)}
+                            >
+                              Открыть
+                            </Button>
+                            <Button
+                              variant="outline"
+                              className="rounded-none border-rose-500/30 bg-rose-500/10 text-rose-100 hover:bg-rose-500/20"
+                              onClick={() => handleDeleteSession(session.id)}
+                              disabled={deleteSession.isPending}
+                            >
+                              Удалить
+                            </Button>
                           </div>
-                        </div>
-                        <div className="mt-2 text-xs text-slate-400">
-                          {session.exercises.length} упражн.
-                          {session.durationMinutes ? ` • ${session.durationMinutes} мин` : ""}
                         </div>
                       </div>
                     );
                   })
                 ) : (
                   <div className="border border-dashed border-white/10 px-4 py-6 text-sm text-slate-500">
-                    Пока нет сохраненных тренировок.
+                    В этом месяце пока нет сохраненных тренировок.
                   </div>
                 )}
               </CardContent>
@@ -674,10 +861,19 @@ export default function TrainingPage() {
         </div>
       </div>
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <Dialog
+        open={createOpen}
+        onOpenChange={open => {
+          setCreateOpen(open);
+          if (!open) {
+            setEditingSession(null);
+            setTrainingForm(resetTrainingForm());
+          }
+        }}
+      >
         <DialogContent className="max-w-5xl border-white/10 bg-[#0b0f14] text-slate-100">
           <DialogHeader>
-            <DialogTitle>Добавить тренировку</DialogTitle>
+            <DialogTitle>{editingSession ? "Р РµРґР°РєС‚РёСЂРѕРІР°С‚СЊ С‚СЂРµРЅРёСЂРѕРІРєСѓ" : "Р”РѕР±Р°РІРёС‚СЊ С‚СЂРµРЅРёСЂРѕРІРєСѓ"}</DialogTitle>
           </DialogHeader>
 
           <div className="grid gap-3 md:grid-cols-4">
@@ -688,13 +884,13 @@ export default function TrainingPage() {
               onChange={event => setTrainingForm(current => ({ ...current, date: event.target.value }))}
             />
             <Input
-              placeholder="Название тренировки"
+              placeholder="РќР°Р·РІР°РЅРёРµ С‚СЂРµРЅРёСЂРѕРІРєРё"
               className="rounded-none border-white/10 bg-white/5 md:col-span-2"
               value={trainingForm.title}
               onChange={event => setTrainingForm(current => ({ ...current, title: event.target.value }))}
             />
             <Input
-              placeholder="Время начала"
+              placeholder="Р’СЂРµРјСЏ РЅР°С‡Р°Р»Р°"
               className="rounded-none border-white/10 bg-white/5"
               value={trainingForm.startTimeText}
               onChange={event => setTrainingForm(current => ({ ...current, startTimeText: event.target.value }))}
@@ -704,13 +900,13 @@ export default function TrainingPage() {
           <div className="grid gap-3 md:grid-cols-[200px_minmax(0,1fr)]">
             <Input
               type="number"
-              placeholder="Длительность, мин"
+              placeholder="Р”Р»РёС‚РµР»СЊРЅРѕСЃС‚СЊ, РјРёРЅ"
               className="rounded-none border-white/10 bg-white/5"
               value={trainingForm.durationMinutes}
               onChange={event => setTrainingForm(current => ({ ...current, durationMinutes: event.target.value }))}
             />
             <Textarea
-              placeholder="Заметка к тренировке"
+              placeholder="Р—Р°РјРµС‚РєР° Рє С‚СЂРµРЅРёСЂРѕРІРєРµ"
               className="min-h-[44px] rounded-none border-white/10 bg-white/5"
               value={trainingForm.notes}
               onChange={event => setTrainingForm(current => ({ ...current, notes: event.target.value }))}
@@ -720,9 +916,9 @@ export default function TrainingPage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm font-medium text-slate-100">Упражнения</div>
+                <div className="text-sm font-medium text-slate-100">РЈРїСЂР°Р¶РЅРµРЅРёСЏ</div>
                 <div className="text-xs text-slate-500">
-                  Для каждого упражнения введите название, вес и количество повторов.
+                  Р”Р»СЏ РєР°Р¶РґРѕРіРѕ СѓРїСЂР°Р¶РЅРµРЅРёСЏ РІРІРµРґРёС‚Рµ РЅР°Р·РІР°РЅРёРµ, РІРµСЃ Рё РєРѕР»РёС‡РµСЃС‚РІРѕ РїРѕРІС‚РѕСЂРѕРІ.
                 </div>
               </div>
 
@@ -733,22 +929,22 @@ export default function TrainingPage() {
                 onClick={addExerciseRow}
               >
                 <Plus className="mr-2 h-4 w-4" />
-                Добавить упражнение
+                Р”РѕР±Р°РІРёС‚СЊ СѓРїСЂР°Р¶РЅРµРЅРёРµ
               </Button>
             </div>
 
             <div className="space-y-2">
               <div className="grid grid-cols-[minmax(0,1fr)_130px_130px_48px] gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-500">
-                <div>Название упражнения</div>
-                <div>Вес, кг</div>
-                <div>Повторы</div>
+                <div>РќР°Р·РІР°РЅРёРµ СѓРїСЂР°Р¶РЅРµРЅРёСЏ</div>
+                <div>Р’РµСЃ, РєРі</div>
+                <div>РџРѕРІС‚РѕСЂС‹</div>
                 <div />
               </div>
 
               {trainingForm.exercises.map(row => (
                 <div key={row.id} className="grid grid-cols-[minmax(0,1fr)_130px_130px_48px] gap-2">
                   <Input
-                    placeholder="Например: Жим лежа"
+                    placeholder="РќР°РїСЂРёРјРµСЂ: Р–РёРј Р»РµР¶Р°"
                     className="rounded-none border-white/10 bg-white/5"
                     value={row.name}
                     onChange={event => updateExerciseRow(row.id, "name", event.target.value)}
@@ -780,15 +976,29 @@ export default function TrainingPage() {
           </div>
 
           <DialogFooter className="gap-2">
+            {editingSession ? (
+              <Button
+                variant="outline"
+                className="rounded-none border-rose-500/30 bg-rose-500/10 text-rose-100 hover:bg-rose-500/20"
+                onClick={() => handleDeleteSession(editingSession.id)}
+                disabled={deleteSession.isPending}
+              >
+                РЈРґР°Р»РёС‚СЊ С‚СЂРµРЅРёСЂРѕРІРєСѓ
+              </Button>
+            ) : null}
             <Button
               variant="outline"
               className="rounded-none border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
-              onClick={() => setCreateOpen(false)}
+              onClick={() => {
+                setCreateOpen(false);
+                setEditingSession(null);
+                setTrainingForm(resetTrainingForm());
+              }}
             >
-              Отмена
+              РћС‚РјРµРЅР°
             </Button>
-            <Button className="rounded-none" onClick={handleSubmitTraining} disabled={createSession.isPending}>
-              Сохранить тренировку
+            <Button className="rounded-none" onClick={handleSubmitTraining} disabled={createSession.isPending || updateSession.isPending}>
+              РЎРѕС…СЂР°РЅРёС‚СЊ С‚СЂРµРЅРёСЂРѕРІРєСѓ
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -806,7 +1016,7 @@ export default function TrainingPage() {
           <div className="flex max-h-[90vh] flex-col">
           <DialogHeader>
             <div className="border-b border-white/10 px-6 py-4">
-              <DialogTitle>Импорт тренировок из HTML</DialogTitle>
+              <DialogTitle>РРјРїРѕСЂС‚ С‚СЂРµРЅРёСЂРѕРІРѕРє РёР· HTML</DialogTitle>
             </div>
           </DialogHeader>
 
@@ -831,9 +1041,9 @@ export default function TrainingPage() {
           <div className="mt-3 border border-white/10 bg-white/5 px-3 py-3 text-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Источник</div>
+                <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">РСЃС‚РѕС‡РЅРёРє</div>
                 <div className="mt-1 text-slate-100">
-                  {importFileName || (importSource.trim() ? "HTML вставлен вручную" : "Файл ещё не выбран")}
+                  {importFileName || (importSource.trim() ? "HTML РІСЃС‚Р°РІР»РµРЅ РІСЂСѓС‡РЅСѓСЋ" : "Р¤Р°Р№Р» РµС‰С‘ РЅРµ РІС‹Р±СЂР°РЅ")}
                 </div>
               </div>
               <button
@@ -841,7 +1051,7 @@ export default function TrainingPage() {
                 className="text-xs uppercase tracking-[0.18em] text-slate-400 hover:text-slate-100"
                 onClick={() => setShowImportSource(current => !current)}
               >
-                {showImportSource ? "Скрыть HTML" : "Показать HTML"}
+                {showImportSource ? "РЎРєСЂС‹С‚СЊ HTML" : "РџРѕРєР°Р·Р°С‚СЊ HTML"}
               </button>
             </div>
           </div>
@@ -850,22 +1060,22 @@ export default function TrainingPage() {
             <Textarea
               value={importSource}
               onChange={event => setImportSource(event.target.value)}
-              placeholder="Можно выбрать файл .html выше или вставить HTML сюда вручную"
+              placeholder="РњРѕР¶РЅРѕ РІС‹Р±СЂР°С‚СЊ С„Р°Р№Р» .html РІС‹С€Рµ РёР»Рё РІСЃС‚Р°РІРёС‚СЊ HTML СЃСЋРґР° РІСЂСѓС‡РЅСѓСЋ"
               className="mt-3 min-h-[220px] rounded-none border-white/10 bg-white/5 font-mono text-xs"
             />
           )}
 
           <div className="mt-3 grid gap-3 md:grid-cols-3">
             <div className="border border-white/10 bg-white/5 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Найдено записей</div>
+              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">РќР°Р№РґРµРЅРѕ Р·Р°РїРёСЃРµР№</div>
               <div className="mt-1 text-xl font-semibold text-slate-100">{importEntries.length}</div>
             </div>
             <div className="border border-white/10 bg-white/5 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Упражнений</div>
+              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">РЈРїСЂР°Р¶РЅРµРЅРёР№</div>
               <div className="mt-1 text-xl font-semibold text-slate-100">{importExerciseNames.length}</div>
             </div>
             <div className="border border-white/10 bg-white/5 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Дат</div>
+              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Р”Р°С‚</div>
               <div className="mt-1 text-xl font-semibold text-slate-100">{importDates.length}</div>
             </div>
           </div>
@@ -873,7 +1083,7 @@ export default function TrainingPage() {
           <div className="mt-3 grid gap-3 md:grid-cols-[0.9fr_1.1fr]">
             <div className="border border-white/10 bg-white/5">
               <div className="border-b border-white/10 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">
-                Найденные упражнения
+                РќР°Р№РґРµРЅРЅС‹Рµ СѓРїСЂР°Р¶РЅРµРЅРёСЏ
               </div>
               <div className="max-h-64 overflow-auto px-3 py-2 text-sm">
                 {importExerciseNames.length ? (
@@ -883,7 +1093,7 @@ export default function TrainingPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="text-slate-500">Пока ничего не распознано</div>
+                  <div className="text-slate-500">РџРѕРєР° РЅРёС‡РµРіРѕ РЅРµ СЂР°СЃРїРѕР·РЅР°РЅРѕ</div>
                 )}
               </div>
             </div>
@@ -891,7 +1101,7 @@ export default function TrainingPage() {
             <div className="border border-white/10 bg-white/5">
               <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
                 <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
-                  Подтверждение импорта
+                  РџРѕРґС‚РІРµСЂР¶РґРµРЅРёРµ РёРјРїРѕСЂС‚Р°
                 </div>
                 <div className="flex gap-3 text-[10px] uppercase tracking-[0.18em]">
                   <button
@@ -899,14 +1109,14 @@ export default function TrainingPage() {
                     className="text-slate-400 hover:text-slate-100"
                     onClick={() => setSelectedImportKeys(importEntries.map(item => item.key))}
                   >
-                    Все
+                    Р’СЃРµ
                   </button>
                   <button
                     type="button"
                     className="text-slate-400 hover:text-slate-100"
                     onClick={() => setSelectedImportKeys([])}
                   >
-                    Снять
+                    РЎРЅСЏС‚СЊ
                   </button>
                 </div>
               </div>
@@ -940,7 +1150,7 @@ export default function TrainingPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="text-slate-500">Загрузите HTML-файл или вставьте HTML выше</div>
+                  <div className="text-slate-500">Р—Р°РіСЂСѓР·РёС‚Рµ HTML-С„Р°Р№Р» РёР»Рё РІСЃС‚Р°РІСЊС‚Рµ HTML РІС‹С€Рµ</div>
                 )}
               </div>
             </div>
@@ -958,14 +1168,14 @@ export default function TrainingPage() {
                 setSelectedImportKeys([]);
               }}
             >
-              Очистить
+              РћС‡РёСЃС‚РёС‚СЊ
             </Button>
             <Button
               className="rounded-none"
               onClick={handleImport}
               disabled={upsertCell.isPending || createExercise.isPending || selectedImportEntries.length === 0}
             >
-              Импортировать выбранное
+              РРјРїРѕСЂС‚РёСЂРѕРІР°С‚СЊ РІС‹Р±СЂР°РЅРЅРѕРµ
             </Button>
           </DialogFooter>
           </div>

@@ -250,6 +250,21 @@ export async function getSessionByDate(userId: number, start: Date, endExclusive
   return sessions[0] ?? null;
 }
 
+export async function getSessionById(userId: number, sessionId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+
+  const sessions = await db
+    .select()
+    .from(trainingSessions)
+    .where(and(eq(trainingSessions.userId, userId), eq(trainingSessions.id, sessionId)))
+    .limit(1);
+
+  if (sessions.length === 0) return null;
+  const hydrated = await hydrateSessions(sessions);
+  return hydrated[0] ?? null;
+}
+
 export async function deleteSessionExercise(sessionExerciseId: number) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
@@ -270,6 +285,15 @@ export async function deleteSessionIfEmpty(sessionId: number) {
   if (remaining.length === 0) {
     await db.delete(trainingSessions).where(eq(trainingSessions.id, sessionId));
   }
+}
+
+export async function deleteSessionById(userId: number, sessionId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+
+  await db
+    .delete(trainingSessions)
+    .where(and(eq(trainingSessions.userId, userId), eq(trainingSessions.id, sessionId)));
 }
 
 export async function updateSessionMeta(

@@ -8,6 +8,7 @@ import { addMonths, format, startOfMonth } from "date-fns";
 import { ru } from "date-fns/locale";
 import {
   createExercise,
+  deleteSessionById,
   createSessionExerciseWithSets,
   createSessionWithExercises,
   deleteSessionExercise,
@@ -15,6 +16,7 @@ import {
   findSessionExerciseByExercise,
   getAnalyticsRows,
   getExerciseHistory,
+  getSessionById,
   getSessionByDate,
   getSessionsByDateRange,
   listExerciseIdsBySession,
@@ -251,6 +253,12 @@ export async function createUserSession(userId: number, input: CreateTrainingSes
 
 export async function listUserRecentSessions(userId: number, limit: number) {
   return listRecentSessionsByUser(userId, limit);
+}
+
+export async function listUserMonthSessions(userId: number, year: number, month: number) {
+  const start = startOfMonth(new Date(year, month - 1, 1));
+  const end = addMonths(start, 1);
+  return getSessionsByDateRange(userId, start, end);
 }
 
 export async function getUserExerciseHistory(userId: number, exerciseId: number, limit: number) {
@@ -491,6 +499,19 @@ export async function getUserSessionDetailsByDate(userId: number, date: string) 
   const end = new Date(`${date}T00:00:00`);
   end.setDate(end.getDate() + 1);
   return getSessionByDate(userId, start, end);
+}
+
+export async function updateUserSession(userId: number, input: CreateTrainingSessionInput & { sessionId: number }) {
+  const existingSession = await getSessionById(userId, input.sessionId);
+  if (!existingSession) throw new Error("Session not found");
+
+  await deleteSessionById(userId, input.sessionId);
+  return createUserSession(userId, input);
+}
+
+export async function deleteUserSession(userId: number, sessionId: number) {
+  await deleteSessionById(userId, sessionId);
+  return { success: true } as const;
 }
 
 export async function upsertUserTrainingCell(

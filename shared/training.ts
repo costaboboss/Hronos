@@ -58,6 +58,11 @@ export const trainingListSessionsInputSchema = z.object({
   limit: z.number().int().min(1).max(50).default(10),
 });
 
+export const trainingMonthSessionsInputSchema = z.object({
+  year: z.number().int().min(2020).max(2100),
+  month: z.number().int().min(1).max(12),
+});
+
 export const trainingMonthInputSchema = z.object({
   year: z.number().int().min(2020).max(2100),
   month: z.number().int().min(1).max(12),
@@ -80,6 +85,20 @@ export const trainingCellInputSchema = z.object({
 
 export const trainingSessionDetailsInputSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export const updateTrainingSessionInputSchema = z.object({
+  sessionId: z.number().int().positive(),
+  title: z.string().trim().min(1).max(200),
+  performedAt: z.string().datetime(),
+  startTimeText: z.string().trim().max(20).optional(),
+  durationMinutes: z.number().int().min(1).max(1440).nullable().optional(),
+  notes: z.string().trim().max(4000).optional(),
+  exercises: z.array(trainingSessionExerciseInputSchema).min(1).max(30),
+});
+
+export const deleteTrainingSessionInputSchema = z.object({
+  sessionId: z.number().int().positive(),
 });
 
 export type TrainingSetType = z.infer<typeof trainingSetTypeSchema>;
