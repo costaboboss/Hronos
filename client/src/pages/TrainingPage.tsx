@@ -184,6 +184,8 @@ export default function TrainingPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [importYear, setImportYear] = useState(() => new Date().getFullYear());
   const [importSource, setImportSource] = useState("");
+  const [importFileName, setImportFileName] = useState("");
+  const [showImportSource, setShowImportSource] = useState(false);
   const [selectedImportKeys, setSelectedImportKeys] = useState<string[]>([]);
   const [trainingForm, setTrainingForm] = useState({
     date: format(new Date(), "yyyy-MM-dd"),
@@ -415,6 +417,8 @@ export default function TrainingPage() {
 
     const text = await file.text();
     setImportSource(text);
+    setImportFileName(file.name);
+    setShowImportSource(false);
     event.target.value = "";
   }
 
@@ -789,12 +793,24 @@ export default function TrainingPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={importOpen} onOpenChange={setImportOpen}>
-        <DialogContent className="max-w-5xl border-white/10 bg-[#0b0f14] text-slate-100">
+      <Dialog
+        open={importOpen}
+        onOpenChange={open => {
+          setImportOpen(open);
+          if (!open) {
+            setShowImportSource(false);
+          }
+        }}
+      >
+        <DialogContent className="max-h-[90vh] max-w-5xl overflow-hidden border-white/10 bg-[#0b0f14] p-0 text-slate-100">
+          <div className="flex max-h-[90vh] flex-col">
           <DialogHeader>
-            <DialogTitle>Импорт тренировок из HTML</DialogTitle>
+            <div className="border-b border-white/10 px-6 py-4">
+              <DialogTitle>Импорт тренировок из HTML</DialogTitle>
+            </div>
           </DialogHeader>
 
+          <div className="flex-1 overflow-y-auto px-6 py-4">
           <div className="grid gap-3 md:grid-cols-[180px_minmax(0,1fr)]">
             <Input
               type="number"
@@ -812,14 +828,34 @@ export default function TrainingPage() {
             />
           </div>
 
-          <Textarea
-            value={importSource}
-            onChange={event => setImportSource(event.target.value)}
-            placeholder="Можно выбрать файл .html выше или вставить HTML сюда вручную"
-            className="min-h-[220px] rounded-none border-white/10 bg-white/5 font-mono text-xs"
-          />
+          <div className="mt-3 border border-white/10 bg-white/5 px-3 py-3 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Источник</div>
+                <div className="mt-1 text-slate-100">
+                  {importFileName || (importSource.trim() ? "HTML вставлен вручную" : "Файл ещё не выбран")}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="text-xs uppercase tracking-[0.18em] text-slate-400 hover:text-slate-100"
+                onClick={() => setShowImportSource(current => !current)}
+              >
+                {showImportSource ? "Скрыть HTML" : "Показать HTML"}
+              </button>
+            </div>
+          </div>
 
-          <div className="grid gap-3 md:grid-cols-3">
+          {showImportSource && (
+            <Textarea
+              value={importSource}
+              onChange={event => setImportSource(event.target.value)}
+              placeholder="Можно выбрать файл .html выше или вставить HTML сюда вручную"
+              className="mt-3 min-h-[220px] rounded-none border-white/10 bg-white/5 font-mono text-xs"
+            />
+          )}
+
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
             <div className="border border-white/10 bg-white/5 px-3 py-2">
               <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Найдено записей</div>
               <div className="mt-1 text-xl font-semibold text-slate-100">{importEntries.length}</div>
@@ -834,7 +870,7 @@ export default function TrainingPage() {
             </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-[0.9fr_1.1fr]">
+          <div className="mt-3 grid gap-3 md:grid-cols-[0.9fr_1.1fr]">
             <div className="border border-white/10 bg-white/5">
               <div className="border-b border-white/10 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">
                 Найденные упражнения
@@ -909,13 +945,16 @@ export default function TrainingPage() {
               </div>
             </div>
           </div>
+          </div>
 
-          <DialogFooter className="gap-2">
+          <DialogFooter className="border-t border-white/10 px-6 py-4">
             <Button
               variant="outline"
               className="rounded-none border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
               onClick={() => {
                 setImportSource("");
+                setImportFileName("");
+                setShowImportSource(false);
                 setSelectedImportKeys([]);
               }}
             >
@@ -929,6 +968,7 @@ export default function TrainingPage() {
               Импортировать выбранное
             </Button>
           </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
