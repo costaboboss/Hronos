@@ -388,21 +388,27 @@ export default function TrainingPage() {
   function openEditDialog(session: NonNullable<(typeof monthSessionsQuery.data)>[number]) {
     const exercises =
       session.exercises.length > 0
-        ? session.exercises.map(item => {
-            const firstSet = item.sets[0];
-            const weight =
-              firstSet?.weightKg ??
-              firstSet?.effectiveWeightKg ??
-              firstSet?.additionalWeightKg ??
-              0;
-            const reps = firstSet?.reps ?? 0;
+        ? session.exercises.flatMap(item => {
+            const exerciseName = item.exercise?.name ?? `Упражнение #${item.exerciseId}`;
+            if (item.sets.length === 0) {
+              return [createExerciseDraft()];
+            }
 
-            return {
-              id: Math.random().toString(36).slice(2, 10),
-              name: item.exercise?.name ?? `Упражнение #${item.exerciseId}`,
-              weightKg: weight ? String(weight) : "",
-              reps: reps ? String(reps) : "",
-            };
+            return item.sets.map(set => {
+              const weight =
+                set.weightKg ??
+                set.effectiveWeightKg ??
+                set.additionalWeightKg ??
+                0;
+              const reps = set.reps ?? 0;
+
+              return {
+                id: Math.random().toString(36).slice(2, 10),
+                name: exerciseName,
+                weightKg: weight ? String(weight) : "",
+                reps: reps ? String(reps) : "",
+              };
+            });
           })
         : [createExerciseDraft()];
 
@@ -455,17 +461,15 @@ export default function TrainingPage() {
     const existingExercises = new Map(
       (exercisesQuery.data ?? []).map(exercise => [exercise.name.trim().toLowerCase(), exercise])
     );
-    const sessionExercises = [];
+    const groupedRows = new Map<
+      string,
+      {
+        name: string;
+        sets: Array<{ weight: number; reps: number }>;
+      }
+    >();
 
     for (const row of normalizedRows) {
-      const key = row.name.toLowerCase();
-      let exercise = existingExercises.get(key);
-
-      if (!exercise) {
-        exercise = await createExercise.mutateAsync({ name: row.name, volumeMode: "weight_reps" });
-        existingExercises.set(key, exercise);
-      }
-
       const weight = Number(row.weightKg.replace(",", "."));
       const reps = Number(row.reps.replace(",", "."));
 
@@ -474,9 +478,45 @@ export default function TrainingPage() {
         return;
       }
 
+      const key = row.name.toLowerCase();
+      const currentGroup = groupedRows.get(key);
+
+      if (currentGroup) {
+        currentGroup.sets.push({
+          weight: Math.round(weight),
+          reps: Math.round(reps),
+        });
+      } else {
+        groupedRows.set(key, {
+          name: row.name,
+          sets: [
+            {
+              weight: Math.round(weight),
+              reps: Math.round(reps),
+            },
+          ],
+        });
+      }
+    }
+
+    const sessionExercises = [];
+
+    for (const [key, group] of Array.from(groupedRows.entries())) {
+      let exercise = existingExercises.get(key);
+
+      if (!exercise) {
+        exercise = await createExercise.mutateAsync({ name: group.name, volumeMode: "weight_reps" });
+        existingExercises.set(key, exercise);
+      }
+
       sessionExercises.push({
         exerciseId: exercise.id,
-        sets: [{ setType: "work" as const, weightKg: Math.round(weight), reps: Math.round(reps), rawInput: `${Math.round(weight)}кг ${Math.round(reps)}` }],
+        sets: group.sets.map((set: { weight: number; reps: number }) => ({
+          setType: "work" as const,
+          weightKg: set.weight,
+          reps: set.reps,
+          rawInput: `${set.weight}кг ${set.reps}`,
+        })),
       });
     }
 
