@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { addMonths, format } from "date-fns";
 import { ru } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileUp, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -21,6 +21,41 @@ type ExerciseDraft = {
   name: string;
   weightKg: string;
   reps: string;
+};
+
+type ImportEntry = {
+  key: string;
+  date: string;
+  exerciseName: string;
+  rawInput: string;
+};
+
+const russianMonthMap: Record<string, number> = {
+  январь: 1,
+  янв: 1,
+  февраль: 2,
+  фев: 2,
+  март: 3,
+  мар: 3,
+  апрель: 4,
+  апр: 4,
+  май: 5,
+  мая: 5,
+  июнь: 6,
+  июн: 6,
+  июль: 7,
+  июл: 7,
+  август: 8,
+  авг: 8,
+  сентябрь: 9,
+  сент: 9,
+  сен: 9,
+  октябрь: 10,
+  окт: 10,
+  ноябрь: 11,
+  ноя: 11,
+  декабрь: 12,
+  дек: 12,
 };
 
 function createExerciseDraft(): ExerciseDraft {
@@ -36,11 +71,120 @@ function formatKg(value: number) {
   return value.toLocaleString("ru-RU");
 }
 
+function normalizeText(value: string) {
+  return value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function parseMonthFromHeading(value: string) {
+  const token = value.toLowerCase().replace(/\./g, "").trim();
+  return russianMonthMap[token] ?? null;
+}
+
+function toTextFromHtml(html: string) {
+  const container = document.createElement("div");
+  container.innerHTML = html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<\/p>/gi, "\n");
+  return container.textContent?.replace(/\r/g, "").trim() ?? "";
+}
+
+function extractParagraphBlocks(cell: Element) {
+  const paragraphs = Array.from(cell.querySelectorAll(".para"));
+  if (paragraphs.length === 0) {
+    const text = toTextFromHtml(cell.innerHTML);
+    return text ? [text.split("\n").map(line => normalizeText(line)).filter(Boolean)] : [];
+  }
+
+  return paragraphs
+    .map(paragraph => toTextFromHtml(paragraph.innerHTML))
+    .map(block => block.split("\n").map(line => normalizeText(line)).filter(Boolean))
+    .filter(lines => lines.length > 0);
+}
+
+function parseExerciseParagraph(lines: string[]) {
+  const joined = lines.join("\n").trim();
+  if (!joined || /^итого[:\s]/i.test(joined)) return null;
+
+  let exerciseName = lines[0].replace(/[:：]\s*$/, "").trim();
+  const restLines = [...lines.slice(1)];
+  const sameLineMatch = exerciseName.match(/^(.+?)(\d+(?:[.,]\d+)?\s*(?:кг|kg)|\d+\.)/i);
+
+  if (sameLineMatch) {
+    exerciseName = sameLineMatch[1].trim().replace(/[:：]\s*$/, "");
+    restLines.unshift(lines[0].slice(sameLineMatch[1].length).trim());
+  }
+
+  const cleanedRest = restLines
+    .map(line => normalizeText(line))
+    .filter(Boolean)
+    .filter(line => !/^итого[:\s]/i.test(line))
+    .filter(line => !/^\d[\d\s.,]*$/.test(line));
+
+  const rawInput = cleanedRest.join("\n").trim();
+  if (!exerciseName || !rawInput || !/\d/.test(rawInput)) return null;
+
+  return {
+    exerciseName: normalizeText(exerciseName),
+    rawInput,
+  };
+}
+
+function parseImportEntries(html: string, year: number) {
+  if (!html.trim()) return [];
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+  const tables = Array.from(doc.querySelectorAll("en-table table, table"));
+  const results: ImportEntry[] = [];
+
+  tables.forEach((table, tableIndex) => {
+    const rows = Array.from(table.querySelectorAll("tr"));
+    if (rows.length < 4) return;
+
+    const monthHeading = normalizeText(rows[0].textContent ?? "");
+    const month = parseMonthFromHeading(monthHeading);
+    if (!month) return;
+
+    const columnDates = Array.from(rows[1].children).map(cell => {
+      const text = normalizeText(cell.textContent ?? "");
+      const dayOnlyMatch = text.match(/^\d{1,2}$/);
+      if (!dayOnlyMatch) return null;
+      return format(new Date(year, month - 1, Number(dayOnlyMatch[0])), "yyyy-MM-dd");
+    });
+
+    rows.slice(3).forEach((row, rowIndex) => {
+      Array.from(row.children).forEach((cell, cellIndex) => {
+        const date = columnDates[cellIndex];
+        if (!date) return;
+
+        extractParagraphBlocks(cell).forEach((paragraphLines, paragraphIndex) => {
+          const parsed = parseExerciseParagraph(paragraphLines);
+          if (!parsed) return;
+
+          results.push({
+            key: `${tableIndex}-${rowIndex}-${cellIndex}-${paragraphIndex}`,
+            date,
+            exerciseName: parsed.exerciseName,
+            rawInput: parsed.rawInput,
+          });
+        });
+      });
+    });
+  });
+
+  return results;
+}
+
 export default function TrainingPage() {
   const utils = trpc.useUtils();
   const [cursorDate, setCursorDate] = useState(() => new Date());
   const [yearCursor, setYearCursor] = useState(() => new Date().getFullYear());
   const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importYear, setImportYear] = useState(() => new Date().getFullYear());
+  const [importSource, setImportSource] = useState("");
+  const [selectedImportKeys, setSelectedImportKeys] = useState<string[]>([]);
   const [trainingForm, setTrainingForm] = useState({
     date: format(new Date(), "yyyy-MM-dd"),
     title: "",
@@ -57,8 +201,8 @@ export default function TrainingPage() {
   const yearOverviewQuery = trpc.training.yearOverview.useQuery({ year: yearCursor });
   const recentSessionsQuery = trpc.training.listRecentSessions.useQuery({ limit: 8 });
   const exercisesQuery = trpc.training.listExercises.useQuery();
-
   const createExercise = trpc.training.createExercise.useMutation();
+
   const createSession = trpc.training.createSession.useMutation({
     onSuccess: async () => {
       await Promise.all([
@@ -82,6 +226,18 @@ export default function TrainingPage() {
     },
   });
 
+  const upsertCell = trpc.training.upsertCell.useMutation({
+    onSuccess: async () => {
+      await Promise.all([
+        utils.training.matrixByMonth.invalidate(),
+        utils.training.yearOverview.invalidate(),
+        utils.training.listRecentSessions.invalidate(),
+        utils.training.dashboard.invalidate(),
+        utils.training.listExercises.invalidate(),
+      ]);
+    },
+  });
+
   const monthHeading = useMemo(
     () => format(cursorDate, "LLLL yyyy", { locale: ru }),
     [cursorDate]
@@ -89,6 +245,26 @@ export default function TrainingPage() {
 
   const monthDays = matrixQuery.data?.days ?? [];
   const monthExercises = matrixQuery.data?.exercises ?? [];
+
+  const importEntries = useMemo(
+    () => parseImportEntries(importSource, importYear),
+    [importSource, importYear]
+  );
+
+  const importExerciseNames = useMemo(
+    () => Array.from(new Set(importEntries.map(item => item.exerciseName))).sort((a, b) => a.localeCompare(b, "ru")),
+    [importEntries]
+  );
+
+  const importDates = useMemo(
+    () => Array.from(new Set(importEntries.map(item => item.date))).sort(),
+    [importEntries]
+  );
+
+  const selectedImportEntries = useMemo(
+    () => importEntries.filter(item => selectedImportKeys.includes(item.key)),
+    [importEntries, selectedImportKeys]
+  );
 
   const monthSummary = useMemo(() => {
     const totalVolume = monthDays.reduce((sum, day) => sum + (day.summary?.volume ?? 0), 0);
@@ -193,6 +369,55 @@ export default function TrainingPage() {
     });
   }
 
+  async function handleImport() {
+    if (selectedImportEntries.length === 0) {
+      toast.error("Нечего импортировать: выберите хотя бы одну запись");
+      return;
+    }
+
+    const existingExercises = new Map(
+      (exercisesQuery.data ?? []).map(exercise => [exercise.name.trim().toLowerCase(), exercise])
+    );
+
+    let importedCount = 0;
+
+    for (const entry of selectedImportEntries) {
+      const key = entry.exerciseName.toLowerCase();
+      let exercise = existingExercises.get(key);
+
+      if (!exercise) {
+        exercise = await createExercise.mutateAsync({
+          name: entry.exerciseName,
+          volumeMode: "weight_reps",
+        });
+        existingExercises.set(key, exercise);
+      }
+
+      await upsertCell.mutateAsync({
+        date: entry.date,
+        exerciseId: exercise.id,
+        rawInput: entry.rawInput,
+        sessionTitle: `Импорт ${entry.date}`,
+      });
+
+      importedCount += 1;
+    }
+
+    setImportOpen(false);
+    setImportSource("");
+    setSelectedImportKeys([]);
+    toast.success(`Импортировано записей: ${importedCount}`);
+  }
+
+  async function handleImportFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const text = await file.text();
+    setImportSource(text);
+    event.target.value = "";
+  }
+
   function updateExerciseRow(id: string, field: keyof Omit<ExerciseDraft, "id">, value: string) {
     setTrainingForm(current => ({
       ...current,
@@ -258,6 +483,15 @@ export default function TrainingPage() {
               onClick={() => setCursorDate(new Date())}
             >
               Текущий месяц
+            </Button>
+
+            <Button
+              variant="outline"
+              className="rounded-none border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
+              onClick={() => setImportOpen(true)}
+            >
+              <FileUp className="mr-2 h-4 w-4" />
+              Импорт HTML
             </Button>
 
             <Button className="rounded-none" onClick={() => setCreateOpen(true)}>
@@ -349,9 +583,7 @@ export default function TrainingPage() {
                     <button
                       type="button"
                       className="text-left capitalize text-slate-200 transition hover:text-white"
-                      onClick={() => {
-                        setCursorDate(new Date(yearCursor, item.month - 1, 1));
-                      }}
+                      onClick={() => setCursorDate(new Date(yearCursor, item.month - 1, 1))}
                     >
                       {item.monthLabel}
                     </button>
@@ -395,7 +627,6 @@ export default function TrainingPage() {
                 )}
               </CardContent>
             </Card>
-
             <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
               <CardHeader className="border-b border-white/10 pb-3">
                 <CardTitle className="text-base">Последние тренировки</CardTitle>
@@ -409,10 +640,7 @@ export default function TrainingPage() {
                     );
 
                     return (
-                      <div
-                        key={session.id}
-                        className="border border-white/10 bg-white/5 px-3 py-3"
-                      >
+                      <div key={session.id} className="border border-white/10 bg-white/5 px-3 py-3">
                         <div className="flex items-center justify-between gap-3">
                           <div className="min-w-0">
                             <div className="truncate font-medium text-slate-100">{session.title}</div>
@@ -425,8 +653,8 @@ export default function TrainingPage() {
                           </div>
                         </div>
                         <div className="mt-2 text-xs text-slate-400">
-                          {session.exercises.length} упражн.{" "}
-                          {session.durationMinutes ? `• ${session.durationMinutes} мин` : ""}
+                          {session.exercises.length} упражн.
+                          {session.durationMinutes ? ` • ${session.durationMinutes} мин` : ""}
                         </div>
                       </div>
                     );
@@ -453,25 +681,19 @@ export default function TrainingPage() {
               type="date"
               className="rounded-none border-white/10 bg-white/5"
               value={trainingForm.date}
-              onChange={event =>
-                setTrainingForm(current => ({ ...current, date: event.target.value }))
-              }
+              onChange={event => setTrainingForm(current => ({ ...current, date: event.target.value }))}
             />
             <Input
               placeholder="Название тренировки"
               className="rounded-none border-white/10 bg-white/5 md:col-span-2"
               value={trainingForm.title}
-              onChange={event =>
-                setTrainingForm(current => ({ ...current, title: event.target.value }))
-              }
+              onChange={event => setTrainingForm(current => ({ ...current, title: event.target.value }))}
             />
             <Input
               placeholder="Время начала"
               className="rounded-none border-white/10 bg-white/5"
               value={trainingForm.startTimeText}
-              onChange={event =>
-                setTrainingForm(current => ({ ...current, startTimeText: event.target.value }))
-              }
+              onChange={event => setTrainingForm(current => ({ ...current, startTimeText: event.target.value }))}
             />
           </div>
 
@@ -481,17 +703,13 @@ export default function TrainingPage() {
               placeholder="Длительность, мин"
               className="rounded-none border-white/10 bg-white/5"
               value={trainingForm.durationMinutes}
-              onChange={event =>
-                setTrainingForm(current => ({ ...current, durationMinutes: event.target.value }))
-              }
+              onChange={event => setTrainingForm(current => ({ ...current, durationMinutes: event.target.value }))}
             />
             <Textarea
               placeholder="Заметка к тренировке"
               className="min-h-[44px] rounded-none border-white/10 bg-white/5"
               value={trainingForm.notes}
-              onChange={event =>
-                setTrainingForm(current => ({ ...current, notes: event.target.value }))
-              }
+              onChange={event => setTrainingForm(current => ({ ...current, notes: event.target.value }))}
             />
           </div>
 
@@ -500,7 +718,7 @@ export default function TrainingPage() {
               <div>
                 <div className="text-sm font-medium text-slate-100">Упражнения</div>
                 <div className="text-xs text-slate-500">
-                  Для каждого упражнения сейчас вводим название, вес и количество повторов.
+                  Для каждого упражнения введите название, вес и количество повторов.
                 </div>
               </div>
 
@@ -524,10 +742,7 @@ export default function TrainingPage() {
               </div>
 
               {trainingForm.exercises.map(row => (
-                <div
-                  key={row.id}
-                  className="grid grid-cols-[minmax(0,1fr)_130px_130px_48px] gap-2"
-                >
+                <div key={row.id} className="grid grid-cols-[minmax(0,1fr)_130px_130px_48px] gap-2">
                   <Input
                     placeholder="Например: Жим лежа"
                     className="rounded-none border-white/10 bg-white/5"
@@ -570,6 +785,148 @@ export default function TrainingPage() {
             </Button>
             <Button className="rounded-none" onClick={handleSubmitTraining} disabled={createSession.isPending}>
               Сохранить тренировку
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent className="max-w-5xl border-white/10 bg-[#0b0f14] text-slate-100">
+          <DialogHeader>
+            <DialogTitle>Импорт тренировок из HTML</DialogTitle>
+          </DialogHeader>
+
+          <div className="grid gap-3 md:grid-cols-[180px_minmax(0,1fr)]">
+            <Input
+              type="number"
+              min={2020}
+              max={2100}
+              value={String(importYear)}
+              className="rounded-none border-white/10 bg-white/5"
+              onChange={event => setImportYear(Number(event.target.value) || new Date().getFullYear())}
+            />
+            <Input
+              type="file"
+              accept=".html,.htm,text/html"
+              className="rounded-none border-white/10 bg-white/5 file:mr-3 file:border-0 file:bg-white/10 file:px-3 file:py-2 file:text-slate-100"
+              onChange={handleImportFileChange}
+            />
+          </div>
+
+          <Textarea
+            value={importSource}
+            onChange={event => setImportSource(event.target.value)}
+            placeholder="Можно выбрать файл .html выше или вставить HTML сюда вручную"
+            className="min-h-[220px] rounded-none border-white/10 bg-white/5 font-mono text-xs"
+          />
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="border border-white/10 bg-white/5 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Найдено записей</div>
+              <div className="mt-1 text-xl font-semibold text-slate-100">{importEntries.length}</div>
+            </div>
+            <div className="border border-white/10 bg-white/5 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Упражнений</div>
+              <div className="mt-1 text-xl font-semibold text-slate-100">{importExerciseNames.length}</div>
+            </div>
+            <div className="border border-white/10 bg-white/5 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Дат</div>
+              <div className="mt-1 text-xl font-semibold text-slate-100">{importDates.length}</div>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-[0.9fr_1.1fr]">
+            <div className="border border-white/10 bg-white/5">
+              <div className="border-b border-white/10 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">
+                Найденные упражнения
+              </div>
+              <div className="max-h-64 overflow-auto px-3 py-2 text-sm">
+                {importExerciseNames.length ? (
+                  <div className="space-y-1">
+                    {importExerciseNames.map(name => (
+                      <div key={name} className="truncate text-slate-200">{name}</div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-slate-500">Пока ничего не распознано</div>
+                )}
+              </div>
+            </div>
+
+            <div className="border border-white/10 bg-white/5">
+              <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
+                <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
+                  Подтверждение импорта
+                </div>
+                <div className="flex gap-3 text-[10px] uppercase tracking-[0.18em]">
+                  <button
+                    type="button"
+                    className="text-slate-400 hover:text-slate-100"
+                    onClick={() => setSelectedImportKeys(importEntries.map(item => item.key))}
+                  >
+                    Все
+                  </button>
+                  <button
+                    type="button"
+                    className="text-slate-400 hover:text-slate-100"
+                    onClick={() => setSelectedImportKeys([])}
+                  >
+                    Снять
+                  </button>
+                </div>
+              </div>
+              <div className="max-h-64 overflow-auto px-3 py-2 text-sm">
+                {importEntries.length ? (
+                  <div className="space-y-2">
+                    {importEntries.slice(0, 80).map(item => (
+                      <label key={item.key} className="flex cursor-pointer gap-2 border border-white/10 px-2 py-2">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5"
+                          checked={selectedImportKeys.includes(item.key)}
+                          onChange={event =>
+                            setSelectedImportKeys(current =>
+                              event.target.checked
+                                ? [...current, item.key]
+                                : current.filter(key => key !== item.key)
+                            )
+                          }
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="truncate font-medium text-slate-100">{item.exerciseName}</span>
+                            <span className="text-xs text-slate-500">{item.date}</span>
+                          </div>
+                          <div className="mt-1 whitespace-pre-line text-xs text-slate-400">
+                            {item.rawInput}
+                          </div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-slate-500">Загрузите HTML-файл или вставьте HTML выше</div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              className="rounded-none border-white/10 bg-white/5 text-slate-100 hover:bg-white/10"
+              onClick={() => {
+                setImportSource("");
+                setSelectedImportKeys([]);
+              }}
+            >
+              Очистить
+            </Button>
+            <Button
+              className="rounded-none"
+              onClick={handleImport}
+              disabled={upsertCell.isPending || createExercise.isPending || selectedImportEntries.length === 0}
+            >
+              Импортировать выбранное
             </Button>
           </DialogFooter>
         </DialogContent>
