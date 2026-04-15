@@ -127,6 +127,12 @@ function buildTagStats(entries: EntryItem[], tags: TagItem[]) {
   return Object.values(map).sort((a, b) => b.blocks - a.blocks);
 }
 
+function buildAwakeTagStats(
+  stats: Array<{ name: string; color: string; blocks: number }>
+) {
+  return stats.filter((item) => item.name.trim().toLowerCase() !== "сон");
+}
+
 function buildEfficiencySeries(
   entries: EntryItem[],
   tags: TagItem[],
@@ -350,6 +356,57 @@ function TagBreakdown({
   );
 }
 
+function TagDistributionChart({
+  title,
+  stats,
+}: {
+  title: string;
+  stats: Array<{ name: string; color: string; blocks: number }>;
+}) {
+  return (
+    <Card className="bg-card border-border">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {stats.length === 0 ? (
+          <div className="py-10 text-sm text-muted-foreground">Недостаточно данных для диаграммы.</div>
+        ) : (
+          <ResponsiveContainer width="100%" height={260}>
+            <PieChart>
+              <Pie
+                data={stats}
+                dataKey="blocks"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                outerRadius={90}
+                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                labelLine={false}
+              >
+                {stats.map((item) => (
+                  <Cell key={item.name} fill={item.color} />
+                ))}
+              </Pie>
+              <Tooltip
+                formatter={(value: number) => minutesToHM(value * 15)}
+                contentStyle={{
+                  backgroundColor: "oklch(0.17 0.01 240)",
+                  border: "1px solid oklch(0.28 0.01 240)",
+                  borderRadius: 6,
+                  color: "#ffffff",
+                }}
+                labelStyle={{ color: "#ffffff" }}
+                itemStyle={{ color: "#ffffff" }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function GoalBreakdown({
   title,
   stats,
@@ -567,6 +624,7 @@ function WeeklyAnalytics({ tags }: { tags: TagItem[] }) {
   });
 
   const stats = useMemo(() => buildTagStats(entries, tags), [entries, tags]);
+  const awakeStats = useMemo(() => buildAwakeTagStats(stats), [stats]);
   const series = useMemo(
     () =>
       buildEfficiencySeries(
@@ -651,44 +709,10 @@ function WeeklyAnalytics({ tags }: { tags: TagItem[] }) {
 
       {stats.length > 0 && (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          <Card className="bg-card border-border">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium">Распределение тегов</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart>
-                  <Pie
-                    data={stats}
-                    dataKey="blocks"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={90}
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    labelLine={false}
-                  >
-                    {stats.map((item) => (
-                      <Cell key={item.name} fill={item.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value: number) => minutesToHM(value * 15)}
-                    contentStyle={{
-                      backgroundColor: "oklch(0.17 0.01 240)",
-                      border: "1px solid oklch(0.28 0.01 240)",
-                      borderRadius: 6,
-                      color: "#ffffff",
-                    }}
-                    labelStyle={{ color: "#ffffff" }}
-                    itemStyle={{ color: "#ffffff" }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
+          <TagDistributionChart title="Распределение тегов" stats={stats} />
           <TagBreakdown title="По тегам" stats={stats} />
+          <TagDistributionChart title="Распределение по бодрствованию" stats={awakeStats} />
+          <TagBreakdown title="По бодрствованию" stats={awakeStats} />
         </div>
       )}
 
@@ -707,6 +731,7 @@ function MonthlyAnalytics({ tags }: { tags: TagItem[] }) {
   });
 
   const stats = useMemo(() => buildTagStats(entries, tags), [entries, tags]);
+  const awakeStats = useMemo(() => buildAwakeTagStats(stats), [stats]);
   const monthDays = useMemo(
     () =>
       eachDayOfInterval({ start: monthOpt.startDate, end: monthOpt.endDate }).filter((day) =>
@@ -749,7 +774,12 @@ function MonthlyAnalytics({ tags }: { tags: TagItem[] }) {
         <EfficiencyTable title="Лучшие дни месяца" series={[...series].sort((a, b) => b.pct - a.pct).slice(0, 10)} />
       </div>
 
-      {stats.length > 0 && <TagBreakdown title="Распределение по тегам" stats={stats} />}
+      {stats.length > 0 && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <TagBreakdown title="Распределение по тегам" stats={stats} />
+          <TagBreakdown title="По бодрствованию" stats={awakeStats} />
+        </div>
+      )}
     </div>
   );
 }
@@ -764,6 +794,7 @@ function YearlyAnalytics({ tags }: { tags: TagItem[] }) {
   });
 
   const yearStats = useMemo(() => buildTagStats(entries, tags), [entries, tags]);
+  const awakeYearStats = useMemo(() => buildAwakeTagStats(yearStats), [yearStats]);
   const weeklyEfficiency = useMemo(() => {
     return WEEK_OPTIONS.map((week) => {
       const weekEntries = entries.filter(
@@ -947,6 +978,13 @@ function YearlyAnalytics({ tags }: { tags: TagItem[] }) {
         <YearTagCharts stats={yearStats} chartType={tagChartType} />
         <TagBreakdown title="По тегам за год" stats={yearStats} />
       </div>
+
+      {awakeYearStats.length > 0 && (
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)] gap-4">
+          <YearTagCharts stats={awakeYearStats} chartType={tagChartType} />
+          <TagBreakdown title="По бодрствованию за год" stats={awakeYearStats} />
+        </div>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {yearStatCards.map((item) => (
