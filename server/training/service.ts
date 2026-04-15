@@ -4,7 +4,7 @@ import type {
   TrainingSetType,
   TrainingVolumeMode,
 } from "@shared/training";
-import { addMonths, format, startOfMonth } from "date-fns";
+import { addMonths, format, getDate, startOfMonth } from "date-fns";
 import { ru } from "date-fns/locale";
 import {
   createExercise,
@@ -190,6 +190,14 @@ function parseRawInput(rawInput: string, volumeMode: TrainingVolumeMode) {
 
 function getBestSetKey(setType: TrainingSetType) {
   return setType === "warmup" ? 0 : 1;
+}
+
+function getSessionVolume(session: Awaited<ReturnType<typeof getSessionsByDateRange>>[number]) {
+  return session.exercises.reduce((sum, exercise) => sum + (exercise.computedVolume ?? 0), 0);
+}
+
+function getWeekBucket(dayOfMonth: number) {
+  return Math.floor((dayOfMonth - 1) / 7) + 1;
 }
 
 export async function listUserExercises(userId: number) {
@@ -492,6 +500,400 @@ export async function getUserTrainingYearOverview(userId: number, year: number) 
       totalVolume,
     };
   });
+}
+
+export async function getUserTrainingAnalytics(
+  userId: number,
+  input: { year: number; month: number; exerciseId?: number }
+) {
+  const monthStart = startOfMonth(new Date(input.year, input.month - 1, 1));
+  const monthEnd = addMonths(monthStart, 1);
+  const previousMonthStart = addMonths(monthStart, -1);
+  const yearStart = new Date(input.year, 0, 1);
+  const yearEnd = new Date(input.year + 1, 0, 1);
+
+  const [monthSessions, previousMonthSessions, yearSessions, exercises] = await Promise.all([
+    getSessionsByDateRange(userId, monthStart, monthEnd),
+    getSessionsByDateRange(userId, previousMonthStart, monthStart),
+    getSessionsByDateRange(userId, yearStart, yearEnd),
+    listExercisesByUser(userId),
+  ]);
+
+  const exerciseMap = new Map(exercises.map(exercise => [exercise.id, exercise]));
+
+  const monthTotalVolume = monthSessions.reduce((sum, session) => sum + getSessionVolume(session), 0);
+  const previousMonthVolume = previousMonthSessions.reduce(
+    (sum, session) => sum + getSessionVolume(session),
+    0
+  );
+  const monthWorkoutCount = monthSessions.length;
+  const previousWorkoutCount = previousMonthSessions.length;
+
+  const weekdayMap = new Map<string, { date: string; dayLabel: string; volume: number; workouts: number }>();
+  const weeklyMap = new Map<
+    number,
+    {
+      week: number;
+      label: string;
+      startDay: number;
+      endDay: number;
+      totalVolume: number;
+      workoutCount: number;
+    }
+  >();
+  const exerciseMonthMap = new Map<
+    number,
+    {
+      exerciseId: number;
+      exerciseName: string;
+      muscleGroup: string | null;
+      totalVolume: number;
+      workoutCount: number;
+      setCount: number;
+      reps: number;
+      averageWeight: number;
+      averageWeightSamples: number;
+      bestWeight: number;
+      bestReps: number;
+      estimatedOneRepMax: number;
+      weekVolumes: Map<number, number>;
+    }
+  >();
+
+  let bestDay:
+    | {
+        date: string;
+        title: string;
+        totalVolume: number;
+      }
+    | null = null;
+  let heaviestSet:
+    | {
+        exerciseName: string;
+        date: string;
+        weightKg: number;
+        reps: number;
+      }
+    | null = null;
+  let bestEstimatedMax:
+    | {
+        exerciseName: string;
+        date: string;
+        estimatedOneRepMax: number;
+        weightKg: number;
+        reps: number;
+      }
+    | null = null;
+  let highestRepSet:
+    | {
+        exerciseName: string;
+        date: string;
+        reps: number;
+        weightKg: number;
+      }
+    | null = null;
+
+  for (const session of monthSessions) {
+    const date = format(session.performedAt, "yyyy-MM-dd");
+    const dayLabel = format(session.performedAt, "d MMM", { locale: ru });
+    const dayVolume = getSessionVolume(session);
+    const dayOfMonth = getDate(session.performedAt);
+    const week = getWeekBucket(dayOfMonth);
+
+    const dayEntry = weekdayMap.get(date);
+    if (dayEntry) {
+      dayEntry.volume += dayVolume;
+      dayEntry.workouts += 1;
+    } else {
+      weekdayMap.set(date, { date, dayLabel, volume: dayVolume, workouts: 1 });
+    }
+
+    const weekEntry = weeklyMap.get(week);
+    if (weekEntry) {
+      weekEntry.totalVolume += dayVolume;
+      weekEntry.workoutCount += 1;
+    } else {
+      const startDay = (week - 1) * 7 + 1;
+      weeklyMap.set(week, {
+        week,
+        label: `Неделя ${week}`,
+        startDay,
+        endDay: Math.min(startDay + 6, new Date(input.year, input.month, 0).getDate()),
+        totalVolume: dayVolume,
+        workoutCount: 1,
+      });
+    }
+
+    if (!bestDay || dayVolume > bestDay.totalVolume) {
+      bestDay = {
+        date,
+        title: session.title,
+        totalVolume: dayVolume,
+      };
+    }
+
+    for (const exercise of session.exercises) {
+      const exerciseInfo = exerciseMap.get(exercise.exerciseId);
+      const current =
+        exerciseMonthMap.get(exercise.exerciseId) ??
+        {
+          exerciseId: exercise.exerciseId,
+          exerciseName: exerciseInfo?.name ?? `Упражнение #${exercise.exerciseId}`,
+          muscleGroup: exerciseInfo?.primaryMuscleGroup ?? null,
+          totalVolume: 0,
+          workoutCount: 0,
+          setCount: 0,
+          reps: 0,
+          averageWeight: 0,
+          averageWeightSamples: 0,
+          bestWeight: 0,
+          bestReps: 0,
+          estimatedOneRepMax: 0,
+          weekVolumes: new Map<number, number>(),
+        };
+
+      current.totalVolume += exercise.computedVolume ?? 0;
+      current.workoutCount += 1;
+      current.weekVolumes.set(week, (current.weekVolumes.get(week) ?? 0) + (exercise.computedVolume ?? 0));
+
+      for (const set of exercise.sets) {
+        const weight = set.weightKg ?? set.effectiveWeightKg ?? set.additionalWeightKg ?? 0;
+        const reps = set.reps ?? 0;
+        const estimate = toOneRepMax(weight, reps);
+
+        current.setCount += 1;
+        current.reps += reps;
+        if (weight > 0) {
+          current.averageWeight += weight;
+          current.averageWeightSamples += 1;
+        }
+        if (weight > current.bestWeight) current.bestWeight = weight;
+        if (reps > current.bestReps) current.bestReps = reps;
+        if (estimate > current.estimatedOneRepMax) current.estimatedOneRepMax = estimate;
+
+        if (!heaviestSet || weight > heaviestSet.weightKg) {
+          heaviestSet = {
+            exerciseName: current.exerciseName,
+            date,
+            weightKg: weight,
+            reps,
+          };
+        }
+
+        if (!bestEstimatedMax || estimate > bestEstimatedMax.estimatedOneRepMax) {
+          bestEstimatedMax = {
+            exerciseName: current.exerciseName,
+            date,
+            estimatedOneRepMax: estimate,
+            weightKg: weight,
+            reps,
+          };
+        }
+
+        if (!highestRepSet || reps > highestRepSet.reps) {
+          highestRepSet = {
+            exerciseName: current.exerciseName,
+            date,
+            reps,
+            weightKg: weight,
+          };
+        }
+      }
+
+      exerciseMonthMap.set(exercise.exerciseId, current);
+    }
+  }
+
+  const yearlyMonthlyVolumeMap = new Map<number, number>();
+  const yearlyMonthlyWorkoutMap = new Map<number, number>();
+  const bestMonthMap = new Map<number, number>();
+  const weekOfYearMap = new Map<
+    string,
+    { key: string; label: string; totalVolume: number; workoutCount: number; order: number }
+  >();
+
+  for (const session of yearSessions) {
+    const sessionMonth = session.performedAt.getMonth() + 1;
+    const sessionVolume = getSessionVolume(session);
+    yearlyMonthlyVolumeMap.set(sessionMonth, (yearlyMonthlyVolumeMap.get(sessionMonth) ?? 0) + sessionVolume);
+    yearlyMonthlyWorkoutMap.set(sessionMonth, (yearlyMonthlyWorkoutMap.get(sessionMonth) ?? 0) + 1);
+    bestMonthMap.set(sessionMonth, Math.max(bestMonthMap.get(sessionMonth) ?? 0, sessionVolume));
+
+    const month = session.performedAt.getMonth() + 1;
+    const day = getDate(session.performedAt);
+    const week = getWeekBucket(day);
+    const key = `${session.performedAt.getFullYear()}-${String(month).padStart(2, "0")}-W${week}`;
+    const entry = weekOfYearMap.get(key);
+    if (entry) {
+      entry.totalVolume += sessionVolume;
+      entry.workoutCount += 1;
+    } else {
+      weekOfYearMap.set(key, {
+        key,
+        label: `${format(session.performedAt, "LLL", { locale: ru })} • Н${week}`,
+        totalVolume: sessionVolume,
+        workoutCount: 1,
+        order: session.performedAt.getMonth() * 10 + week,
+      });
+    }
+  }
+
+  const monthSeries = Array.from({ length: 12 }, (_, index) => ({
+    month: index + 1,
+    monthLabel: format(new Date(input.year, index, 1), "LLL", { locale: ru }),
+    totalVolume: yearlyMonthlyVolumeMap.get(index + 1) ?? 0,
+    workoutCount: yearlyMonthlyWorkoutMap.get(index + 1) ?? 0,
+    bestWorkoutVolume: bestMonthMap.get(index + 1) ?? 0,
+  }));
+
+  const weeklySeries = Array.from({ length: Math.max(weeklyMap.size, 5) }, (_, index) => {
+    const week = index + 1;
+    const current = weeklyMap.get(week);
+    return (
+      current ?? {
+        week,
+        label: `Неделя ${week}`,
+        startDay: (week - 1) * 7 + 1,
+        endDay: Math.min((week - 1) * 7 + 7, new Date(input.year, input.month, 0).getDate()),
+        totalVolume: 0,
+        workoutCount: 0,
+      }
+    );
+  });
+
+  const dailySeries = Array.from(weekdayMap.values()).sort((left, right) => left.date.localeCompare(right.date));
+  const exerciseMonthSeries = Array.from(exerciseMonthMap.values())
+    .map(item => ({
+      ...item,
+      averageWeightKg:
+        item.averageWeightSamples > 0 ? Math.round(item.averageWeight / item.averageWeightSamples) : 0,
+      weeklyVolumes: weeklySeries.map(week => ({
+        week: week.week,
+        label: week.label,
+        totalVolume: item.weekVolumes.get(week.week) ?? 0,
+      })),
+    }))
+    .sort((left, right) => right.totalVolume - left.totalVolume);
+
+  const muscleGroupSeries = Array.from(
+    exerciseMonthSeries.reduce((acc, item) => {
+      const key = item.muscleGroup || "Прочее";
+      acc.set(key, (acc.get(key) ?? 0) + item.totalVolume);
+      return acc;
+    }, new Map<string, number>()).entries()
+  )
+    .map(([name, totalVolume]) => ({ name, totalVolume }))
+    .sort((left, right) => right.totalVolume - left.totalVolume);
+
+  const weeklyYearSeries = Array.from(weekOfYearMap.values()).sort((left, right) => left.order - right.order);
+
+  const selectedExerciseId = input.exerciseId ?? exerciseMonthSeries[0]?.exerciseId ?? null;
+  const selectedExercise = selectedExerciseId
+    ? exerciseMonthSeries.find(item => item.exerciseId === selectedExerciseId) ?? null
+    : null;
+
+  const selectedExerciseYearPoints =
+    selectedExerciseId == null
+      ? []
+      : monthSeries.map(month => {
+          const monthStartForExercise = startOfMonth(new Date(input.year, month.month - 1, 1));
+          const monthEndForExercise = addMonths(monthStartForExercise, 1);
+          const sessionsForExercise = yearSessions.filter(session => {
+            if (session.performedAt < monthStartForExercise || session.performedAt >= monthEndForExercise) return false;
+            return session.exercises.some(exercise => exercise.exerciseId === selectedExerciseId);
+          });
+
+          let totalVolume = 0;
+          let bestWeight = 0;
+          let bestEstimate = 0;
+          let workoutCount = 0;
+
+          for (const session of sessionsForExercise) {
+            for (const exercise of session.exercises) {
+              if (exercise.exerciseId !== selectedExerciseId) continue;
+              totalVolume += exercise.computedVolume ?? 0;
+              workoutCount += 1;
+              for (const set of exercise.sets) {
+                const weight = set.weightKg ?? set.effectiveWeightKg ?? set.additionalWeightKg ?? 0;
+                const reps = set.reps ?? 0;
+                bestWeight = Math.max(bestWeight, weight);
+                bestEstimate = Math.max(bestEstimate, toOneRepMax(weight, reps));
+              }
+            }
+          }
+
+          return {
+            month: month.month,
+            label: month.monthLabel,
+            totalVolume,
+            workoutCount,
+            bestWeight,
+            estimatedOneRepMax: bestEstimate,
+          };
+        });
+
+  const records = {
+    bestDay,
+    bestWeek:
+      weeklyYearSeries.reduce<(typeof weeklyYearSeries)[number] | null>(
+        (best, item) => (!best || item.totalVolume > best.totalVolume ? item : best),
+        null
+      ) ?? null,
+    bestMonth:
+      monthSeries.reduce<(typeof monthSeries)[number] | null>(
+        (best, item) => (!best || item.totalVolume > best.totalVolume ? item : best),
+        null
+      ) ?? null,
+    heaviestSet,
+    bestEstimatedMax,
+    highestRepSet,
+  };
+
+  return {
+    summary: {
+      monthTotalVolume,
+      previousMonthVolume,
+      monthWorkoutCount,
+      previousWorkoutCount,
+      averageWorkoutVolume: monthWorkoutCount > 0 ? Math.round(monthTotalVolume / monthWorkoutCount) : 0,
+      maxDayVolume: bestDay?.totalVolume ?? 0,
+      volumeDelta: monthTotalVolume - previousMonthVolume,
+      workoutDelta: monthWorkoutCount - previousWorkoutCount,
+    },
+    series: {
+      months: monthSeries,
+      weeks: weeklySeries,
+      days: dailySeries,
+      yearlyWeeks: weeklyYearSeries,
+    },
+    exercises: {
+      selectedExerciseId,
+      month: exerciseMonthSeries,
+      selected:
+        selectedExercise == null
+          ? null
+          : {
+              exerciseId: selectedExercise.exerciseId,
+              exerciseName: selectedExercise.exerciseName,
+              muscleGroup: selectedExercise.muscleGroup,
+              totalVolume: selectedExercise.totalVolume,
+              workoutCount: selectedExercise.workoutCount,
+              setCount: selectedExercise.setCount,
+              reps: selectedExercise.reps,
+              averageWeightKg:
+                selectedExercise.averageWeightSamples > 0
+                  ? Math.round(selectedExercise.averageWeight / selectedExercise.averageWeightSamples)
+                  : 0,
+              bestWeight: selectedExercise.bestWeight,
+              bestReps: selectedExercise.bestReps,
+              estimatedOneRepMax: selectedExercise.estimatedOneRepMax,
+              weeklyVolumes: selectedExercise.weeklyVolumes,
+              monthlyProgress: selectedExerciseYearPoints,
+            },
+    },
+    muscleGroups: muscleGroupSeries,
+    records,
+  };
 }
 
 export async function getUserSessionDetailsByDate(userId: number, date: string) {

@@ -1,6 +1,14 @@
 ﻿import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
   Dialog,
   DialogContent,
   DialogFooter,
@@ -14,6 +22,17 @@ import { addMonths, format } from "date-fns";
 import { ru } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, FileUp, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { toast } from "sonner";
 
 type ExerciseDraft = {
@@ -97,6 +116,11 @@ function createEmptyTrainingForm() {
 
 function formatKg(value: number) {
   return `${value.toLocaleString("ru-RU")} кг`;
+}
+
+function formatDelta(value: number) {
+  if (value === 0) return "0";
+  return `${value > 0 ? "+" : ""}${value.toLocaleString("ru-RU")}`;
 }
 
 function normalizeText(value: string) {
@@ -216,12 +240,18 @@ export default function TrainingPage() {
   const [importFileName, setImportFileName] = useState("");
   const [showImportSource, setShowImportSource] = useState(false);
   const [selectedImportKeys, setSelectedImportKeys] = useState<string[]>([]);
+  const [selectedExerciseId, setSelectedExerciseId] = useState<string>("auto");
   const [trainingForm, setTrainingForm] = useState(createEmptyTrainingForm);
 
   const year = cursorDate.getFullYear();
   const month = cursorDate.getMonth() + 1;
 
   const matrixQuery = trpc.training.matrixByMonth.useQuery({ year, month });
+  const analyticsQuery = trpc.training.analytics.useQuery({
+    year,
+    month,
+    exerciseId: selectedExerciseId === "auto" ? undefined : Number(selectedExerciseId),
+  });
   const yearOverviewQuery = trpc.training.yearOverview.useQuery({ year: yearCursor });
   const monthSessionsQuery = trpc.training.listMonthSessions.useQuery({ year, month });
   const exercisesQuery = trpc.training.listExercises.useQuery();
@@ -234,6 +264,7 @@ export default function TrainingPage() {
         utils.training.yearOverview.invalidate(),
         utils.training.listMonthSessions.invalidate(),
         utils.training.dashboard.invalidate(),
+        utils.training.analytics.invalidate(),
         utils.training.listExercises.invalidate(),
       ]);
       setCreateOpen(false);
@@ -250,6 +281,7 @@ export default function TrainingPage() {
         utils.training.yearOverview.invalidate(),
         utils.training.listMonthSessions.invalidate(),
         utils.training.dashboard.invalidate(),
+        utils.training.analytics.invalidate(),
         utils.training.listExercises.invalidate(),
       ]);
       setCreateOpen(false);
@@ -266,6 +298,7 @@ export default function TrainingPage() {
         utils.training.yearOverview.invalidate(),
         utils.training.listMonthSessions.invalidate(),
         utils.training.dashboard.invalidate(),
+        utils.training.analytics.invalidate(),
       ]);
       setCreateOpen(false);
       setEditingSession(null);
@@ -281,6 +314,7 @@ export default function TrainingPage() {
         utils.training.yearOverview.invalidate(),
         utils.training.listMonthSessions.invalidate(),
         utils.training.dashboard.invalidate(),
+        utils.training.analytics.invalidate(),
         utils.training.listExercises.invalidate(),
       ]);
     },
@@ -348,6 +382,11 @@ export default function TrainingPage() {
     () => Array.from(new Set((exercisesQuery.data ?? []).map(item => item.name))).sort((a, b) => a.localeCompare(b, "ru")),
     [exercisesQuery.data]
   );
+  const analyticsData = analyticsQuery.data;
+  const exerciseSelectValue = analyticsData?.exercises.selectedExerciseId
+    ? String(analyticsData.exercises.selectedExerciseId)
+    : "auto";
+  const activeExerciseValue = selectedExerciseId === "auto" ? exerciseSelectValue : selectedExerciseId;
 
   function resetFormAndCloseDialog() {
     setCreateOpen(false);
@@ -656,6 +695,16 @@ export default function TrainingPage() {
     );
   }
 
+  function renderRecordCard(label: string, value: string, hint?: string) {
+    return (
+      <div className="border border-white/10 bg-white/5 px-3 py-3">
+        <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">{label}</div>
+        <div className="mt-2 text-lg font-semibold text-slate-100">{value}</div>
+        {hint ? <div className="mt-1 text-xs text-slate-400">{hint}</div> : null}
+      </div>
+    );
+  }
+
   return (
     <div className="h-full overflow-auto bg-[#07090d] text-slate-100">
       <div className="mx-auto flex max-w-[1600px] flex-col gap-5 p-4">
@@ -699,67 +748,268 @@ export default function TrainingPage() {
           <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100"><CardHeader className="pb-2"><CardTitle className="text-sm text-slate-400">Пиковый день</CardTitle></CardHeader><CardContent><div className="text-3xl font-semibold">{formatKg(monthSummary.maxDayVolume)}</div><div className="mt-2 text-sm text-slate-500">Максимальная грузоподъёмность за день</div></CardContent></Card>
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-          <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
-            <CardHeader className="border-b border-white/10 pb-3">
-              <div className="flex items-center justify-between gap-3">
-                <CardTitle className="text-base">Аналитика года</CardTitle>
-                <div className="flex items-center border border-white/10 bg-[#10161d]">
-                  <Button variant="ghost" className="rounded-none border-r border-white/10 px-3 text-slate-100 hover:bg-white/10" onClick={() => setYearCursor(current => current - 1)}><ChevronLeft className="h-4 w-4" /></Button>
-                  <div className="min-w-[88px] px-4 text-center text-sm font-medium">{yearCursor}</div>
-                  <Button variant="ghost" className="rounded-none border-l border-white/10 px-3 text-slate-100 hover:bg-white/10" onClick={() => setYearCursor(current => current + 1)}><ChevronRight className="h-4 w-4" /></Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="grid grid-cols-[minmax(0,1fr)_170px_150px] border-b border-white/10 bg-white/5 px-4 py-3 text-[11px] uppercase tracking-[0.2em] text-slate-500">
-                <div>Месяц</div>
-                <div className="text-right">Грузоподъёмность</div>
-                <div className="text-right">Тренировок</div>
-              </div>
-              <div className="divide-y divide-white/10">
-                {(yearOverviewQuery.data ?? []).map(item => (
-                  <div key={item.month} className="grid grid-cols-[minmax(0,1fr)_170px_150px] px-4 py-3 text-sm">
-                    <button type="button" className="text-left capitalize text-slate-200 transition hover:text-white" onClick={() => setCursorDate(new Date(yearCursor, item.month - 1, 1))}>{item.monthLabel}</button>
-                    <div className="text-right font-medium text-slate-100">{formatKg(item.totalVolume)}</div>
-                    <div className="text-right text-slate-400">{item.workoutCount}</div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+        <Tabs defaultValue="overview" className="gap-4">
+          <TabsList className="h-auto rounded-none border border-white/10 bg-[#10161d] p-1">
+            <TabsTrigger value="overview" className="rounded-none data-[state=active]:bg-white/10 data-[state=active]:text-white">Обзор</TabsTrigger>
+            <TabsTrigger value="load" className="rounded-none data-[state=active]:bg-white/10 data-[state=active]:text-white">Нагрузка</TabsTrigger>
+            <TabsTrigger value="exercises" className="rounded-none data-[state=active]:bg-white/10 data-[state=active]:text-white">Упражнения</TabsTrigger>
+            <TabsTrigger value="records" className="rounded-none data-[state=active]:bg-white/10 data-[state=active]:text-white">Рекорды</TabsTrigger>
+          </TabsList>
 
-          <div className="space-y-4">
-            <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
-              <CardHeader className="border-b border-white/10 pb-3"><CardTitle className="text-base">Тренировки месяца</CardTitle></CardHeader>
-              <CardContent className="space-y-3 pt-4">
-                {monthSessions.length ? monthSessions.map(session => renderSessionCard(session)) : <div className="border border-dashed border-white/10 px-4 py-6 text-sm text-slate-500">В выбранном месяце пока нет сохранённых тренировок.</div>}
-              </CardContent>
-            </Card>
-
-            <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
-              <CardHeader className="border-b border-white/10 pb-3"><CardTitle className="text-base">Топ упражнений месяца</CardTitle></CardHeader>
-              <CardContent className="space-y-3 pt-4">
-                {monthSummary.topExercises.length ? monthSummary.topExercises.map((exercise, index) => (
-                  <div key={exercise.id} className="flex items-center justify-between border border-white/10 bg-white/5 px-3 py-2">
-                    <div className="min-w-0">
-                      <div className="text-xs uppercase tracking-[0.18em] text-slate-500">{index + 1} место</div>
-                      <div className="truncate font-medium text-slate-100">{exercise.name}</div>
+          <TabsContent value="overview" className="space-y-4">
+            <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+              <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
+                <CardHeader className="border-b border-white/10 pb-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <CardTitle className="text-base">Грузоподъёмность по месяцам</CardTitle>
+                    <div className="flex items-center border border-white/10 bg-[#10161d]">
+                      <Button variant="ghost" className="rounded-none border-r border-white/10 px-3 text-slate-100 hover:bg-white/10" onClick={() => setYearCursor(current => current - 1)}><ChevronLeft className="h-4 w-4" /></Button>
+                      <div className="min-w-[88px] px-4 text-center text-sm font-medium">{yearCursor}</div>
+                      <Button variant="ghost" className="rounded-none border-l border-white/10 px-3 text-slate-100 hover:bg-white/10" onClick={() => setYearCursor(current => current + 1)}><ChevronRight className="h-4 w-4" /></Button>
                     </div>
-                    <div className="text-right font-semibold text-slate-100">{formatKg(exercise.totalVolume)}</div>
                   </div>
-                )) : <div className="border border-dashed border-white/10 px-4 py-6 text-sm text-slate-500">В выбранном месяце пока нет тренировок.</div>}
-              </CardContent>
-            </Card>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <ResponsiveContainer width="100%" height={320}>
+                    <BarChart data={analyticsData?.series.months ?? yearOverviewQuery.data ?? []} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.16)" />
+                      <XAxis dataKey="monthLabel" tick={{ fontSize: 11, fill: "#94a3b8" }} />
+                      <YAxis tick={{ fontSize: 10, fill: "#64748b" }} />
+                      <Tooltip
+                        contentStyle={{ background: "#0f172a", border: "1px solid rgba(148,163,184,0.2)" }}
+                        formatter={(value: number, name: string) => [
+                          name === "workoutCount" ? `${value} трен.` : formatKg(value),
+                          name === "workoutCount" ? "Тренировок" : "Грузоподъёмность",
+                        ]}
+                      />
+                      <Bar dataKey="totalVolume" fill="#60a5fa" radius={[0, 0, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
+                <CardHeader className="border-b border-white/10 pb-3"><CardTitle className="text-base">Сдвиг к прошлому месяцу</CardTitle></CardHeader>
+                <CardContent className="grid gap-3 pt-4">
+                  {renderRecordCard("Тоннаж", formatDelta(analyticsData?.summary.volumeDelta ?? 0), `Сейчас ${formatKg(analyticsData?.summary.monthTotalVolume ?? 0)} • было ${formatKg(analyticsData?.summary.previousMonthVolume ?? 0)}`)}
+                  {renderRecordCard("Тренировки", formatDelta(analyticsData?.summary.workoutDelta ?? 0), `Сейчас ${analyticsData?.summary.monthWorkoutCount ?? 0} • было ${analyticsData?.summary.previousWorkoutCount ?? 0}`)}
+                  {renderRecordCard("Средняя тренировка", formatKg(analyticsData?.summary.averageWorkoutVolume ?? 0), `Максимум дня ${formatKg(analyticsData?.summary.maxDayVolume ?? 0)}`)}
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
+              <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
+                <CardHeader className="border-b border-white/10 pb-3"><CardTitle className="text-base">Недельный ритм месяца</CardTitle></CardHeader>
+                <CardContent className="pt-4">
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={analyticsData?.series.weeks ?? []} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.16)" />
+                      <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#94a3b8" }} />
+                      <YAxis tick={{ fontSize: 10, fill: "#64748b" }} />
+                      <Tooltip
+                        contentStyle={{ background: "#0f172a", border: "1px solid rgba(148,163,184,0.2)" }}
+                        formatter={(value: number, name: string) => [
+                          name === "workoutCount" ? `${value} трен.` : formatKg(value),
+                          name === "workoutCount" ? "Тренировок" : "Грузоподъёмность",
+                        ]}
+                        labelFormatter={(label, payload) => {
+                          const item = payload?.[0]?.payload;
+                          return item ? `${label}: ${item.startDay}-${item.endDay} число` : String(label);
+                        }}
+                      />
+                      <Bar dataKey="totalVolume" fill="#34d399" radius={[0, 0, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
+                <CardHeader className="border-b border-white/10 pb-3"><CardTitle className="text-base">Тренировки месяца</CardTitle></CardHeader>
+                <CardContent className="space-y-3 pt-4">
+                  {monthSessions.length ? monthSessions.map(session => renderSessionCard(session)) : <div className="border border-dashed border-white/10 px-4 py-6 text-sm text-slate-500">В выбранном месяце пока нет сохранённых тренировок.</div>}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="load" className="space-y-4">
+            <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+              <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
+                <CardHeader className="border-b border-white/10 pb-3"><CardTitle className="text-base">Дневная нагрузка месяца</CardTitle></CardHeader>
+                <CardContent className="pt-4">
+                  <ResponsiveContainer width="100%" height={320}>
+                    <LineChart data={analyticsData?.series.days ?? []} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.16)" />
+                      <XAxis dataKey="dayLabel" tick={{ fontSize: 11, fill: "#94a3b8" }} />
+                      <YAxis tick={{ fontSize: 10, fill: "#64748b" }} />
+                      <Tooltip
+                        contentStyle={{ background: "#0f172a", border: "1px solid rgba(148,163,184,0.2)" }}
+                        formatter={(value: number) => [formatKg(value), "Тоннаж"]}
+                        labelFormatter={(label, payload) => payload?.[0]?.payload?.date ?? String(label)}
+                      />
+                      <Line type="monotone" dataKey="volume" stroke="#f59e0b" strokeWidth={3} dot={{ r: 3, fill: "#f59e0b" }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
+                <CardHeader className="border-b border-white/10 pb-3"><CardTitle className="text-base">Нагрузка по группам</CardTitle></CardHeader>
+                <CardContent className="pt-4">
+                  <ResponsiveContainer width="100%" height={320}>
+                    <BarChart data={analyticsData?.muscleGroups ?? []} layout="vertical" margin={{ top: 8, right: 16, left: 16, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.16)" />
+                      <XAxis type="number" tick={{ fontSize: 10, fill: "#64748b" }} />
+                      <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11, fill: "#94a3b8" }} />
+                      <Tooltip
+                        contentStyle={{ background: "#0f172a", border: "1px solid rgba(148,163,184,0.2)" }}
+                        formatter={(value: number) => [formatKg(value), "Тоннаж"]}
+                      />
+                      <Bar dataKey="totalVolume" fill="#a78bfa" radius={[0, 0, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
 
             <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
-              <CardHeader className="border-b border-white/10 pb-3"><CardTitle className="text-base">История выбранного месяца</CardTitle></CardHeader>
-              <CardContent className="space-y-3 pt-4">
-                {monthSessions.length ? monthSessions.map(session => renderSessionCard(session)) : <div className="border border-dashed border-white/10 px-4 py-6 text-sm text-slate-500">В этом месяце пока нет сохранённых тренировок.</div>}
+              <CardHeader className="border-b border-white/10 pb-3"><CardTitle className="text-base">Упражнения месяца</CardTitle></CardHeader>
+              <CardContent className="pt-4">
+                <div className="grid grid-cols-[minmax(0,1.3fr)_140px_110px_110px_120px] border-b border-white/10 bg-white/5 px-4 py-3 text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                  <div>Упражнение</div>
+                  <div className="text-right">Тоннаж</div>
+                  <div className="text-right">Тренировок</div>
+                  <div className="text-right">Подходов</div>
+                  <div className="text-right">e1RM</div>
+                </div>
+                <div className="divide-y divide-white/10">
+                  {(analyticsData?.exercises.month ?? []).map(item => (
+                    <button
+                      key={item.exerciseId}
+                      type="button"
+                      className="grid w-full grid-cols-[minmax(0,1.3fr)_140px_110px_110px_120px] px-4 py-3 text-sm transition hover:bg-white/5"
+                      onClick={() => setSelectedExerciseId(String(item.exerciseId))}
+                    >
+                      <div className="min-w-0 text-left">
+                        <div className="truncate text-slate-100">{item.exerciseName}</div>
+                        <div className="mt-1 text-xs text-slate-500">{item.muscleGroup || "Прочее"}</div>
+                      </div>
+                      <div className="text-right font-medium text-slate-100">{formatKg(item.totalVolume)}</div>
+                      <div className="text-right text-slate-400">{item.workoutCount}</div>
+                      <div className="text-right text-slate-400">{item.setCount}</div>
+                      <div className="text-right text-slate-400">{item.estimatedOneRepMax ? formatKg(item.estimatedOneRepMax) : "—"}</div>
+                    </button>
+                  ))}
+                </div>
               </CardContent>
             </Card>
-          </div>
-        </div>
+          </TabsContent>
+
+          <TabsContent value="exercises" className="space-y-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="text-sm text-slate-400">Упражнение</div>
+              <Select value={activeExerciseValue} onValueChange={value => setSelectedExerciseId(value)}>
+                <SelectTrigger className="w-[280px] rounded-none border-white/10 bg-[#10161d] text-slate-100">
+                  <SelectValue placeholder="Выберите упражнение" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(analyticsData?.exercises.month ?? []).map(item => (
+                    <SelectItem key={item.exerciseId} value={String(item.exerciseId)}>
+                      {item.exerciseName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {analyticsData?.exercises.selected ? (
+              <>
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100"><CardHeader className="pb-2"><CardTitle className="text-sm text-slate-400">Тоннаж упражнения</CardTitle></CardHeader><CardContent><div className="text-3xl font-semibold">{formatKg(analyticsData.exercises.selected.totalVolume)}</div><div className="mt-2 text-sm text-slate-500">{analyticsData.exercises.selected.exerciseName}</div></CardContent></Card>
+                  <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100"><CardHeader className="pb-2"><CardTitle className="text-sm text-slate-400">Лучший вес</CardTitle></CardHeader><CardContent><div className="text-3xl font-semibold">{analyticsData.exercises.selected.bestWeight ? formatKg(analyticsData.exercises.selected.bestWeight) : "—"}</div><div className="mt-2 text-sm text-slate-500">Максимальный рабочий вес</div></CardContent></Card>
+                  <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100"><CardHeader className="pb-2"><CardTitle className="text-sm text-slate-400">e1RM</CardTitle></CardHeader><CardContent><div className="text-3xl font-semibold">{analyticsData.exercises.selected.estimatedOneRepMax ? formatKg(analyticsData.exercises.selected.estimatedOneRepMax) : "—"}</div><div className="mt-2 text-sm text-slate-500">Оценка одноповторного максимума</div></CardContent></Card>
+                  <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100"><CardHeader className="pb-2"><CardTitle className="text-sm text-slate-400">Средний вес</CardTitle></CardHeader><CardContent><div className="text-3xl font-semibold">{analyticsData.exercises.selected.averageWeightKg ? formatKg(analyticsData.exercises.selected.averageWeightKg) : "—"}</div><div className="mt-2 text-sm text-slate-500">Средний рабочий вес в месяце</div></CardContent></Card>
+                </div>
+
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
+                    <CardHeader className="border-b border-white/10 pb-3"><CardTitle className="text-base">Недельный объём упражнения</CardTitle></CardHeader>
+                    <CardContent className="pt-4">
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={analyticsData.exercises.selected.weeklyVolumes} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.16)" />
+                          <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#94a3b8" }} />
+                          <YAxis tick={{ fontSize: 10, fill: "#64748b" }} />
+                          <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid rgba(148,163,184,0.2)" }} formatter={(value: number) => [formatKg(value), "Тоннаж"]} />
+                          <Bar dataKey="totalVolume" fill="#38bdf8" radius={[0, 0, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
+                    <CardHeader className="border-b border-white/10 pb-3"><CardTitle className="text-base">Прогресс по месяцам</CardTitle></CardHeader>
+                    <CardContent className="pt-4">
+                      <ResponsiveContainer width="100%" height={300}>
+                        <LineChart data={analyticsData.exercises.selected.monthlyProgress} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.16)" />
+                          <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#94a3b8" }} />
+                          <YAxis tick={{ fontSize: 10, fill: "#64748b" }} />
+                          <Tooltip
+                            contentStyle={{ background: "#0f172a", border: "1px solid rgba(148,163,184,0.2)" }}
+                            formatter={(value: number, name: string) => [
+                              name === "estimatedOneRepMax" ? formatKg(value) : formatKg(value),
+                              name === "estimatedOneRepMax" ? "e1RM" : "Тоннаж",
+                            ]}
+                          />
+                          <Line type="monotone" dataKey="totalVolume" stroke="#22c55e" strokeWidth={3} dot={{ r: 3, fill: "#22c55e" }} />
+                          <Line type="monotone" dataKey="estimatedOneRepMax" stroke="#f97316" strokeWidth={2} dot={{ r: 2, fill: "#f97316" }} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+                </div>
+              </>
+            ) : (
+              <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
+                <CardContent className="px-4 py-8 text-sm text-slate-500">Для анализа упражнения выберите его из списка выше.</CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="records" className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {renderRecordCard("Лучший день", analyticsData?.records.bestDay ? formatKg(analyticsData.records.bestDay.totalVolume) : "—", analyticsData?.records.bestDay ? `${analyticsData.records.bestDay.date} • ${analyticsData.records.bestDay.title}` : undefined)}
+              {renderRecordCard("Лучшая неделя", analyticsData?.records.bestWeek ? formatKg(analyticsData.records.bestWeek.totalVolume) : "—", analyticsData?.records.bestWeek ? `${analyticsData.records.bestWeek.label} • ${analyticsData.records.bestWeek.workoutCount} трен.` : undefined)}
+              {renderRecordCard("Лучший месяц", analyticsData?.records.bestMonth ? formatKg(analyticsData.records.bestMonth.totalVolume) : "—", analyticsData?.records.bestMonth ? `${analyticsData.records.bestMonth.monthLabel} • ${analyticsData.records.bestMonth.workoutCount} трен.` : undefined)}
+              {renderRecordCard("Самый тяжёлый подход", analyticsData?.records.heaviestSet ? formatKg(analyticsData.records.heaviestSet.weightKg) : "—", analyticsData?.records.heaviestSet ? `${analyticsData.records.heaviestSet.exerciseName} • ${analyticsData.records.heaviestSet.reps} повт.` : undefined)}
+              {renderRecordCard("Лучший e1RM", analyticsData?.records.bestEstimatedMax ? formatKg(analyticsData.records.bestEstimatedMax.estimatedOneRepMax) : "—", analyticsData?.records.bestEstimatedMax ? `${analyticsData.records.bestEstimatedMax.exerciseName} • ${analyticsData.records.bestEstimatedMax.weightKg} × ${analyticsData.records.bestEstimatedMax.reps}` : undefined)}
+              {renderRecordCard("Самый многоповторный сет", analyticsData?.records.highestRepSet ? `${analyticsData.records.highestRepSet.reps} повт.` : "—", analyticsData?.records.highestRepSet ? `${analyticsData.records.highestRepSet.exerciseName} • ${formatKg(analyticsData.records.highestRepSet.weightKg)}` : undefined)}
+            </div>
+
+            <Card className="rounded-none border-white/10 bg-[#0b0f14] text-slate-100">
+              <CardHeader className="border-b border-white/10 pb-3"><CardTitle className="text-base">Недельная динамика за год</CardTitle></CardHeader>
+              <CardContent className="pt-4">
+                <ResponsiveContainer width="100%" height={320}>
+                  <LineChart data={analyticsData?.series.yearlyWeeks ?? []} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.16)" />
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#94a3b8" }} interval={0} angle={-25} textAnchor="end" height={70} />
+                    <YAxis tick={{ fontSize: 10, fill: "#64748b" }} />
+                    <Tooltip
+                      contentStyle={{ background: "#0f172a", border: "1px solid rgba(148,163,184,0.2)" }}
+                      formatter={(value: number, name: string) => [
+                        name === "workoutCount" ? `${value} трен.` : formatKg(value),
+                        name === "workoutCount" ? "Тренировок" : "Тоннаж",
+                      ]}
+                    />
+                    <Line type="monotone" dataKey="totalVolume" stroke="#e879f9" strokeWidth={3} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
 
       <Dialog open={createOpen} onOpenChange={open => { setCreateOpen(open); if (!open) resetFormAndCloseDialog(); }}>

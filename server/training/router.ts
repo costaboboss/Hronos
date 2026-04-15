@@ -4,6 +4,7 @@ import {
   deleteTrainingSessionInputSchema,
   trainingCellInputSchema,
   trainingHistoryInputSchema,
+  trainingAnalyticsInputSchema,
   trainingListSessionsInputSchema,
   trainingMonthSessionsInputSchema,
   trainingMonthInputSchema,
@@ -19,6 +20,7 @@ import {
   getUserExerciseHistory,
   getUserSessionDetailsByDate,
   getUserTrainingDashboard,
+  getUserTrainingAnalytics,
   getUserTrainingMatrix,
   getUserTrainingYearOverview,
   listUserMonthSessions,
@@ -72,6 +74,10 @@ export const trainingRouter = router({
     .mutation(({ ctx, input }) => deleteUserSession(ctx.user.id, input.sessionId)),
 
   dashboard: protectedProcedure.query(({ ctx }) => getUserTrainingDashboard(ctx.user.id)),
+
+  analytics: protectedProcedure
+    .input(trainingAnalyticsInputSchema)
+    .query(({ ctx, input }) => getUserTrainingAnalytics(ctx.user.id, input)),
 
   yearOverview: protectedProcedure
     .input(trainingYearInputSchema)

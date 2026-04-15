@@ -72,6 +72,12 @@ export const trainingYearInputSchema = z.object({
   year: z.number().int().min(2020).max(2100),
 });
 
+export const trainingAnalyticsInputSchema = z.object({
+  year: z.number().int().min(2020).max(2100),
+  month: z.number().int().min(1).max(12),
+  exerciseId: z.number().int().positive().optional(),
+});
+
 export const trainingCellInputSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   exerciseId: z.number().int().positive(),
