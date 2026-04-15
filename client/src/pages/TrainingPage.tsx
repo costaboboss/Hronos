@@ -368,6 +368,29 @@ export default function TrainingPage() {
     }));
   }
 
+  function handleExerciseFieldKeyDown(
+    rowId: string,
+    field: keyof Omit<ExerciseDraft, "id">,
+    event: React.KeyboardEvent<HTMLInputElement>
+  ) {
+    if (event.key !== "ArrowDown") return;
+
+    event.preventDefault();
+
+    const currentIndex = trainingForm.exercises.findIndex(row => row.id === rowId);
+    if (currentIndex === -1) return;
+
+    const nextRow = trainingForm.exercises[currentIndex + 1];
+    if (!nextRow) return;
+
+    const nextInput = document.querySelector<HTMLInputElement>(
+      `[data-exercise-id="${nextRow.id}"][data-exercise-field="${field}"]`
+    );
+
+    nextInput?.focus();
+    nextInput?.select();
+  }
+
   function addExerciseRow() {
     setTrainingForm(current => ({
       ...current,
@@ -760,9 +783,9 @@ export default function TrainingPage() {
                 <div className="grid grid-cols-[minmax(0,1fr)_130px_130px_48px] gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-500"><div>Название упражнения</div><div>Вес, кг</div><div>Повторы</div><div /></div>
               {trainingForm.exercises.map(row => (
                 <div key={row.id} className="grid grid-cols-[minmax(0,1fr)_130px_130px_48px] gap-2">
-                  <Input list="training-exercise-options" placeholder="Например: Жим лёжа" className="rounded-none border-white/10 bg-white/5" value={row.name} onChange={event => updateExerciseRow(row.id, "name", event.target.value)} />
-                  <Input placeholder="60" className="rounded-none border-white/10 bg-white/5" value={row.weightKg} onChange={event => updateExerciseRow(row.id, "weightKg", event.target.value)} />
-                  <Input placeholder="10" className="rounded-none border-white/10 bg-white/5" value={row.reps} onChange={event => updateExerciseRow(row.id, "reps", event.target.value)} />
+                  <Input list="training-exercise-options" data-exercise-id={row.id} data-exercise-field="name" placeholder="Например: Жим лёжа" className="rounded-none border-white/10 bg-white/5" value={row.name} onChange={event => updateExerciseRow(row.id, "name", event.target.value)} onKeyDown={event => handleExerciseFieldKeyDown(row.id, "name", event)} />
+                  <Input data-exercise-id={row.id} data-exercise-field="weightKg" placeholder="60" className="rounded-none border-white/10 bg-white/5" value={row.weightKg} onChange={event => updateExerciseRow(row.id, "weightKg", event.target.value)} onKeyDown={event => handleExerciseFieldKeyDown(row.id, "weightKg", event)} />
+                  <Input data-exercise-id={row.id} data-exercise-field="reps" placeholder="10" className="rounded-none border-white/10 bg-white/5" value={row.reps} onChange={event => updateExerciseRow(row.id, "reps", event.target.value)} onKeyDown={event => handleExerciseFieldKeyDown(row.id, "reps", event)} />
                   <Button type="button" variant="ghost" className="rounded-none border border-white/10 text-slate-400 hover:bg-white/10 hover:text-slate-100" onClick={() => removeExerciseRow(row.id)} disabled={trainingForm.exercises.length === 1}><Trash2 className="h-4 w-4" /></Button>
                 </div>
               ))}
