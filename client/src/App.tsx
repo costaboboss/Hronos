@@ -12,6 +12,7 @@ import TardisDocumentPage from "./pages/TardisDocumentPage";
 import TardisPage from "./pages/TardisPage";
 import DashboardLayout from "./components/DashboardLayout";
 import TrainingPage from "./pages/TrainingPage";
+import SettingsPage from "./pages/SettingsPage";
 import { useAuth } from "./_core/hooks/useAuth";
 
 function AuthenticatedApp() {
@@ -39,6 +40,7 @@ function AuthenticatedApp() {
         <Route path="/training" component={TrainingPage} />
         <Route path="/tardis" component={TardisPage} />
         <Route path="/tardis/doc/:id" component={TardisDocumentPage} />
+        <Route path="/settings" component={SettingsPage} />
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
       </Switch>

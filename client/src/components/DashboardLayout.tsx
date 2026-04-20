@@ -29,6 +29,7 @@ import {
   LogOut,
   NotebookPen,
   PanelLeft,
+  Settings,
   Tag,
 } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useRef, useState } from "react";
@@ -40,6 +41,7 @@ const hronosMenuItems = [
   { icon: Clock, label: "Учёт времени", path: "/" },
   { icon: BarChart2, label: "Аналитика", path: "/analytics" },
   { icon: Tag, label: "Категории тегов", path: "/tags" },
+  { icon: Settings, label: "Настройки", path: "/settings" },
 ];
 
 const topLevelItems = [
@@ -59,7 +61,8 @@ function isRouteActive(location: string, path: string) {
       location === "/" ||
       location.startsWith("/tracking") ||
       location.startsWith("/analytics") ||
-      location.startsWith("/tags")
+      location.startsWith("/tags") ||
+      location.startsWith("/settings")
     );
   }
 

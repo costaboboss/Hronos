@@ -1,11 +1,21 @@
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import {
   InsertTag,
   InsertTimeEntry,
   InsertUser,
+  tardisBlocks,
+  tardisDocumentLinks,
+  tardisDocuments,
+  tardisNotebookGroups,
+  tardisNotebooks,
+  tardisSections,
   tags,
+  trainingExercises,
+  trainingSessionExercises,
+  trainingSessions,
+  trainingSets,
   timeEntries,
   users,
 } from "../drizzle/schema";
@@ -82,6 +92,139 @@ export async function getUserByOpenId(openId: string) {
     .limit(1);
 
   return result[0];
+}
+
+export async function getUserBackupBundle(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+
+  const [userRows, tagRows, timeEntryRows, tardisGroupRows, trainingExerciseRows, trainingSessionRows] =
+    await Promise.all([
+      db.select().from(users).where(eq(users.id, userId)).limit(1),
+      db.select().from(tags).where(eq(tags.userId, userId)).orderBy(asc(tags.createdAt), asc(tags.id)),
+      db
+        .select()
+        .from(timeEntries)
+        .where(eq(timeEntries.userId, userId))
+        .orderBy(asc(timeEntries.entryDate), asc(timeEntries.startTime), asc(timeEntries.id)),
+      db
+        .select()
+        .from(tardisNotebookGroups)
+        .where(eq(tardisNotebookGroups.userId, userId))
+        .orderBy(asc(tardisNotebookGroups.sortOrder), asc(tardisNotebookGroups.id)),
+      db
+        .select()
+        .from(trainingExercises)
+        .where(eq(trainingExercises.userId, userId))
+        .orderBy(asc(trainingExercises.createdAt), asc(trainingExercises.id)),
+      db
+        .select()
+        .from(trainingSessions)
+        .where(eq(trainingSessions.userId, userId))
+        .orderBy(asc(trainingSessions.performedAt), asc(trainingSessions.id)),
+    ]);
+
+  const tardisGroupIds = tardisGroupRows.map(item => item.id);
+  const tardisNotebookRows =
+    tardisGroupIds.length > 0
+      ? await db
+          .select()
+          .from(tardisNotebooks)
+          .where(inArray(tardisNotebooks.groupId, tardisGroupIds))
+          .orderBy(asc(tardisNotebooks.sortOrder), asc(tardisNotebooks.id))
+      : [];
+
+  const tardisNotebookIds = tardisNotebookRows.map(item => item.id);
+  const tardisDocumentRows =
+    tardisNotebookIds.length > 0
+      ? await db
+          .select()
+          .from(tardisDocuments)
+          .where(inArray(tardisDocuments.notebookId, tardisNotebookIds))
+          .orderBy(asc(tardisDocuments.sortOrder), asc(tardisDocuments.id))
+      : [];
+
+  const tardisDocumentIds = tardisDocumentRows.map(item => item.id);
+  const [tardisSectionRows, tardisBlockRows, tardisLinkRows] =
+    tardisDocumentIds.length > 0
+      ? await Promise.all([
+          db
+            .select()
+            .from(tardisSections)
+            .where(inArray(tardisSections.documentId, tardisDocumentIds))
+            .orderBy(asc(tardisSections.sortOrder), asc(tardisSections.id)),
+          db
+            .select()
+            .from(tardisBlocks)
+            .where(inArray(tardisBlocks.documentId, tardisDocumentIds))
+            .orderBy(asc(tardisBlocks.sortOrder), asc(tardisBlocks.id)),
+          db
+            .select()
+            .from(tardisDocumentLinks)
+            .where(
+              and(
+                inArray(tardisDocumentLinks.fromDocumentId, tardisDocumentIds),
+                inArray(tardisDocumentLinks.toDocumentId, tardisDocumentIds)
+              )
+            )
+            .orderBy(asc(tardisDocumentLinks.sortOrder), asc(tardisDocumentLinks.id)),
+        ])
+      : [[], [], []];
+
+  const trainingSessionIds = trainingSessionRows.map(item => item.id);
+  const trainingSessionExerciseRows =
+    trainingSessionIds.length > 0
+      ? await db
+          .select()
+          .from(trainingSessionExercises)
+          .where(inArray(trainingSessionExercises.sessionId, trainingSessionIds))
+          .orderBy(asc(trainingSessionExercises.sessionId), asc(trainingSessionExercises.sortOrder), asc(trainingSessionExercises.id))
+      : [];
+
+  const trainingSessionExerciseIds = trainingSessionExerciseRows.map(item => item.id);
+  const trainingSetRows =
+    trainingSessionExerciseIds.length > 0
+      ? await db
+          .select()
+          .from(trainingSets)
+          .where(inArray(trainingSets.sessionExerciseId, trainingSessionExerciseIds))
+          .orderBy(asc(trainingSets.sessionExerciseId), asc(trainingSets.setOrder), asc(trainingSets.id))
+      : [];
+
+  return {
+    version: 1,
+    app: "hronos",
+    exportedAt: new Date().toISOString(),
+    user: userRows[0] ?? null,
+    data: {
+      tags: tagRows,
+      timeEntries: timeEntryRows,
+      tardisNotebookGroups: tardisGroupRows,
+      tardisNotebooks: tardisNotebookRows,
+      tardisDocuments: tardisDocumentRows,
+      tardisSections: tardisSectionRows,
+      tardisBlocks: tardisBlockRows,
+      tardisDocumentLinks: tardisLinkRows,
+      trainingExercises: trainingExerciseRows,
+      trainingSessions: trainingSessionRows,
+      trainingSessionExercises: trainingSessionExerciseRows,
+      trainingSets: trainingSetRows,
+    },
+    counts: {
+      tags: tagRows.length,
+      timeEntries: timeEntryRows.length,
+      tardisNotebookGroups: tardisGroupRows.length,
+      tardisNotebooks: tardisNotebookRows.length,
+      tardisDocuments: tardisDocumentRows.length,
+      tardisSections: tardisSectionRows.length,
+      tardisBlocks: tardisBlockRows.length,
+      tardisDocumentLinks: tardisLinkRows.length,
+      trainingExercises: trainingExerciseRows.length,
+      trainingSessions: trainingSessionRows.length,
+      trainingSessionExercises: trainingSessionExerciseRows.length,
+      trainingSets: trainingSetRows.length,
+    },
+  };
 }
 
 const DEFAULT_TAGS = [

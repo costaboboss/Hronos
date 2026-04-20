@@ -25,6 +25,12 @@ export const appRouter = router({
     }),
   }),
 
+  backup: router({
+    export: protectedProcedure.mutation(async ({ ctx }) => {
+      return db.getUserBackupBundle(ctx.user.id);
+    }),
+  }),
+
   tags: router({
     list: protectedProcedure.query(async ({ ctx }) => {
       await db.ensureDefaultTags(ctx.user.id);
